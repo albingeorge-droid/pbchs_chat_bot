@@ -4,7 +4,6 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine, Result
 from config import get_database_url
 from pre_execution_validation import clean_and_validate_sql, SQLValidationError
-from langsmith import traceable
 
 
 DATABASE_URL = get_database_url()
@@ -14,7 +13,7 @@ engine: Engine = create_engine(
     connect_args={"connect_timeout": 10},
 )
 
-@traceable(run_type="tool", name="run_select")
+
 def run_select(query: str) -> List[Dict[str, Any]]:
     """
     Validate query with shared guardrails, then execute.

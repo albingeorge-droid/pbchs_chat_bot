@@ -4,10 +4,8 @@ import json
 
 from openai_client import GroqClient
 from prompts import FINAL_RESPONSE_SYSTEM_PROMPT
-from langsmith import traceable
 
 
-@traceable(run_type="chain", name="build_final_answer")
 def build_final_answer(
     llm: GroqClient,
     user_query: str,

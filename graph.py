@@ -3,7 +3,7 @@ import re
 from typing import TypedDict, Annotated, Sequence, Literal
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
-from langsmith import traceable
+
 
 from openai_client import GroqClient
 from memory import HistoryManager, ConversationMemory
@@ -1045,7 +1045,6 @@ LIMIT 5;
         return state
 
     
-    @traceable(run_type="chain", name="property_chatbot_graph")
     def run(self, user_query: str) -> tuple[str, str, list[dict]]:
         """Run the graph"""
         initial_state: ChatbotState = {

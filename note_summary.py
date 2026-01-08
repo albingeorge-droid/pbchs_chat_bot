@@ -1,4 +1,3 @@
-from langsmith import traceable
 
 from db import run_select
 from openai_client import GroqClient
@@ -37,7 +36,6 @@ from typing import List, Dict, Tuple
 import os
 
 
-@traceable(run_type="chain", name="generate_property_note_pdf")
 def generate_property_note_pdf(
     llm: GroqClient,
     pra: str,

@@ -7,8 +7,6 @@ from sqlglot import parse_one, expressions as exp
 from sqlglot.errors import ParseError
 from openai_client import GroqClient
 from prompts import SQL_GENERATION_SYSTEM_PROMPT
-from langsmith import traceable   # <-- ADD THIS
-
 
 # -----------------------------
 # Basic config / allow-lists
@@ -467,11 +465,7 @@ def clean_and_validate_sql(sql: str) -> tuple[str, Dict[str, Any]]:
 # -----------------------------
 
 
-@traceable(
-    run_type="chain",
-    name="validate_and_maybe_regenerate_sql",
-    metadata={"stage": "sql_guardrail_repair"},
-)
+
 def validate_and_maybe_regenerate_sql(
     llm: GroqClient,
     sql_query: str,

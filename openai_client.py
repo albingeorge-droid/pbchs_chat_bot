@@ -3,9 +3,7 @@ import json
 import re
 from typing import List, Dict, Any
 
-
 from openai import OpenAI
-from langsmith import traceable
 
 from config import settings
 
@@ -31,36 +29,7 @@ class GroqClient:
     # Core LLM call (this is what LangSmith traces)
     # ------------------------------------------------------------------
 
-    @traceable(
-        run_type="llm",
-        name="openai_chat_completion",
-        metadata={
-            "ls_provider": "openai",
-            "ls_model_name": settings.openai_chat_model,
-        },
-        process_inputs=lambda args: {
-            "messages": args.get("messages", []),
-            "model": settings.openai_chat_model,  # <-- use the real attribute
-        },
-        # How outputs + token usage appear in the trace
-        process_outputs=lambda resp: {
-            "messages": [
-                {
-                    "role": "assistant",
-                    "content": resp.choices[0].message.content or "",
-                }
-            ],
-            "usage_metadata": (
-                {
-                    "input_tokens": getattr(resp.usage, "prompt_tokens", None),
-                    "output_tokens": getattr(resp.usage, "completion_tokens", None),
-                    "total_tokens": getattr(resp.usage, "total_tokens", None),
-                }
-                if getattr(resp, "usage", None) is not None
-                else None
-            ),
-        },
-    )
+
     def _chat_completion(
         self,
         messages: List[Dict[str, str]],

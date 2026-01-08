@@ -4,9 +4,6 @@ import re
 
 from openai_client import GroqClient
 from prompts import SQL_GENERATION_SYSTEM_PROMPT, TABLE_SCHEMAS
-from langsmith import traceable
-
-
 
 def _build_sql_prompt(
     standalone_question: str,
@@ -81,7 +78,6 @@ def clean_sql(response_text: str) -> str:
         sql += ";"
     return sql.strip()
 
-@traceable(run_type="chain", name="generate_sql")
 def generate_sql(
     llm: GroqClient,
     standalone_question: str,
