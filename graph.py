@@ -1,9 +1,10 @@
 from __future__ import annotations
 import re
-from typing import TypedDict, Annotated, Sequence, Literal
+from typing import TypedDict, Annotated, Sequence, Literal, Callable, Optional
+
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
-
+from langsmith import traceable
 
 from openai_client import GroqClient
 from memory import HistoryManager, ConversationMemory
@@ -22,7 +23,13 @@ from prompts import (
     SQL_GENERATION_SYSTEM_PROMPT,
     NOTE_SUMMARY_SYSTEM_PROMPT,   # NEW
 )
-from note_summary import generate_property_note_pdf  # NEW
+from .map import (
+    parse_plot_road_from_text,
+    lookup_pra_for_plot_road,
+    fetch_map_for_pra,
+)
+
+from .note_summary import generate_property_note_pdf  # NEW
 from sqlalchemy.exc import ProgrammingError
 from rapidfuzz import fuzz, process
 
@@ -54,6 +61,9 @@ class ChatbotState(TypedDict):
     note_pra: str | None
     note_pdf_path: str | None
 
+    #geometry for map responses (GeoJSON features)
+    geometry: list[dict] | None
+
 
 class PropertyChatbotGraph:
     def __init__(self, user_id: str | None = None, thread_id: str | None = None):
@@ -74,6 +84,9 @@ class PropertyChatbotGraph:
             "road": None,
         }
         
+        # Optional streaming callback for final answer tokens
+        self.on_token: Callable[[str], None] | None = None
+
         # Build the graph
         self.graph = self._build_graph()
     
@@ -99,6 +112,11 @@ class PropertyChatbotGraph:
         workflow.add_node("collect_plot", self.collect_plot)
         workflow.add_node("collect_road", self.collect_road)
 
+        # ✅ single-shot note summary (plot+road in one message)
+        workflow.add_node("note_direct", self.note_summary_direct)
+
+        # ✅ MAP node (single-turn)
+        workflow.add_node("map_lookup", self.map_lookup)
         
         # Set entry point
         workflow.set_entry_point("load_history")
@@ -117,6 +135,8 @@ class PropertyChatbotGraph:
                 "note_start": "start_note_summary",
                 "note_plot": "collect_plot",
                 "note_road": "collect_road",
+                "note_direct": "note_direct",
+                "map": "map_lookup",
             },
         )
         
@@ -137,6 +157,9 @@ class PropertyChatbotGraph:
         workflow.add_edge("start_note_summary", END)
         workflow.add_edge("collect_plot", END)
         workflow.add_edge("collect_road", END)
+        workflow.add_edge("note_direct", END) 
+        
+        workflow.add_edge("map_lookup", "save_history")
 
         
         return workflow.compile()
@@ -162,7 +185,34 @@ class PropertyChatbotGraph:
         )
         state["classification"] = cls
         return state
-    
+
+    def _is_map_trigger(self, text: str) -> bool:
+        """
+        Detect 'show the map...' style questions.
+
+        Very simple heuristic: must contain 'map' and either 'plot'/'road'
+        or look like 'map 30/14'.
+        """
+        if not text:
+            return False
+
+        base = text.lower()
+
+        if "map" not in base:
+            return False
+
+        # strong hints
+        if "plot" in base or "road" in base:
+            return True
+
+        # fallback: "map 30/14" etc
+        if re.search(r"\bmap\s+(\d{1,4})\s*[/ ]\s*(\d{1,4})\b", base):
+            return True
+
+        return False
+
+
+
 
     def _is_note_summary_trigger(self, text: str, threshold: int = 80) -> bool:
         """
@@ -214,11 +264,12 @@ class PropertyChatbotGraph:
 
         Priority:
         1) If we are mid note-summary flow, route by self.note_flow.step
-        2) If this message starts a note-summary flow, go to start_note_summary
+        2) If this message starts a note-summary flow:
+           - if it already has plot+road → note_direct
+           - else → start_note_summary
         3) Otherwise use normal classifier label
         """
         user_q_raw = state["user_query"]
-        user_q = user_q_raw.lower()
 
         # 1) Ongoing note-summary wizard: route by step and SKIP classifier
         if self.note_flow.get("active"):
@@ -228,9 +279,26 @@ class PropertyChatbotGraph:
             if step == "road":
                 return "note_road"
 
-        # 2) New note-summary request (fuzzy)
+        # 2) ✅ Single-turn map query
+        if self._is_map_trigger(user_q_raw):
+            return "map"
+
+        # 3) Note-summary request (fuzzy)
         if self._is_note_summary_trigger(user_q_raw):
-            # Start note-flow: next user input should be interpreted as plot number
+            # Try to see if user already gave plot+road in same sentence
+            plot_raw, road_raw = parse_plot_road_from_text(user_q_raw)
+
+            if plot_raw and road_raw:
+                # Single-shot: don't run the interactive wizard
+                self.note_flow = {
+                    "active": False,
+                    "step": None,
+                    "plot": None,
+                    "road": None,
+                }
+                return "note_direct"
+
+            # Old behaviour: start 2-step wizard
             self.note_flow = {
                 "active": True,
                 "step": "plot",
@@ -239,7 +307,7 @@ class PropertyChatbotGraph:
             }
             return "note_start"
 
-        # 3) Normal routing based on classifier label
+        # 4) Normal routing based on classifier label
         label = state["classification"].get("label", "property_talk").strip()
         if label == "small_talk":
             return "small_talk"
@@ -299,7 +367,7 @@ LIMIT 5000;
     def _fuzzy_match_person_name(
         self,
         raw_name: str,
-        threshold: int = 70,
+        threshold: int = 85,
     ) -> str:
         """
         Fuzzy match a person name against persons.name using RapidFuzz.
@@ -313,7 +381,7 @@ SELECT DISTINCT TRIM(name) AS val
 FROM persons
 WHERE name IS NOT NULL
   AND TRIM(name) <> ''
-LIMIT 5000;
+LIMIT 45000;
 """.strip()
 
         rows = run_select(sql_distinct) or []
@@ -606,6 +674,7 @@ LIMIT 5000;
         state["final_answer"] = answer
         state["sql_query"] = "-- NO SQL (small_talk)"
         state["sql_rows"] = []
+        state["geometry"] = None
         return state
     
     def handle_irrelevant(self, state: ChatbotState) -> ChatbotState:
@@ -619,6 +688,7 @@ LIMIT 5000;
         state["final_answer"] = answer
         state["sql_query"] = "-- NO SQL (irrelevant_question)"
         state["sql_rows"] = []
+        state["geometry"] = None
         return state
     
     def start_note_summary(self, state: ChatbotState) -> ChatbotState:
@@ -718,6 +788,7 @@ LIMIT 5;
             state["note_pra"] = None
             state["note_pdf_path"] = None
             state["error"] = None
+            state["geometry"] = None
 
             # Reset note wizard
             self.note_flow = {
@@ -800,6 +871,208 @@ LIMIT 5;
 
         # ⚠️ Do NOT save history here
         return state
+
+    def note_summary_direct(self, state: ChatbotState) -> ChatbotState:
+        """
+        Single-turn note summary:
+        e.g. 'generate note summary of plot 30 road 14' or 'note summary for 30/14'.
+
+        We reuse the same PRA lookup + PDF logic as collect_road,
+        but parse plot+road from the sentence instead of using note_flow.
+        """
+        plot_raw, road_raw = parse_plot_road_from_text(state["user_query"])
+
+        # If parsing fails for some reason, fall back to the interactive flow
+        if not plot_raw or not road_raw:
+            return self.start_note_summary(state)
+
+        # Fuzzy match plot + road
+        plot = self._fuzzy_match_column("plot_no", plot_raw.strip(), threshold=80)
+        road = self._fuzzy_match_column("road_no", road_raw.strip(), threshold=65)
+
+        safe_plot = plot.replace("'", "''")
+        safe_road = road.replace("'", "''")
+
+        sql_pra_lookup = f"""
+SELECT p.pra
+FROM properties p
+JOIN property_addresses pa
+  ON pa.property_id = p.id
+WHERE TRIM(pa.plot_no) = '{safe_plot}'
+  AND TRIM(pa.road_no) = '{safe_road}'
+LIMIT 5;
+""".strip()
+
+        pra_rows = run_select(sql_pra_lookup) or []
+
+        # No match
+        if not pra_rows:
+            state["final_answer"] = (
+                f"I couldn't find any property for plot {plot} and road {road}.\n"
+                "Please check if the numbers are correct and try again."
+            )
+            state["sql_query"] = "-- NOTE_SUMMARY_FLOW: no PRA found"
+            state["sql_rows"] = []
+            state["note_pra"] = None
+            state["note_pdf_path"] = None
+            state["error"] = None
+            state["geometry"] = None
+            return state
+
+        # Multiple matches
+        if len(pra_rows) > 1:
+            pras = [row.get("pra") for row in pra_rows if row.get("pra")]
+            pras_list = ", ".join(pras) if pras else "N/A"
+            state["final_answer"] = (
+                f"There are multiple properties for plot {plot} and road {road}.\n"
+                f"Matching PRAs: {pras_list}.\n"
+                "Please specify the exact PRA you want the note summary for."
+            )
+            state["sql_query"] = sql_pra_lookup
+            state["sql_rows"] = pra_rows
+            state["note_pra"] = None
+            state["note_pdf_path"] = None
+            state["error"] = None
+            state["geometry"] = None
+            return state
+
+        # Exactly one PRA
+        pra = pra_rows[0].get("pra")
+        if not pra:
+            state["final_answer"] = (
+                f"I found one property for plot {plot} and road {road}, "
+                "but it does not have a PRA stored. I can't generate the note summary."
+            )
+            state["sql_query"] = sql_pra_lookup
+            state["sql_rows"] = pra_rows
+            state["note_pra"] = None
+            state["note_pdf_path"] = None
+            state["error"] = None
+            state["geometry"] = None
+            return state
+
+        # Generate the note PDF
+        summary_text, pdf_path, _current_rows, _history_rows = generate_property_note_pdf(
+            llm=self.llm,
+            pra=pra,
+        )
+
+        state["final_answer"] = "note summary saved;"
+        state["sql_query"] = sql_pra_lookup + f"\n-- NOTE_SUMMARY for PRA {pra}"
+        state["sql_rows"] = pra_rows
+        state["note_pra"] = pra
+        state["note_pdf_path"] = pdf_path
+        state["error"] = None
+        state["geometry"] = None
+        return state
+
+
+    def map_lookup(self, state: ChatbotState) -> ChatbotState:
+        """
+        Handle: 'show the map of plot 30 road 15'.
+
+        Steps:
+        - parse plot + road from the question
+        - fuzzy-match both against DB
+        - resolve PRA
+        - fetch geometry from pbchs_map
+        - populate final_answer, sql_query, sql_rows, geometry
+        """
+        query = state["user_query"]
+
+        plot_raw, road_raw = parse_plot_road_from_text(query)
+
+        if not plot_raw or not road_raw:
+            state["final_answer"] = (
+                "To show the property map, please tell me both the plot and "
+                "road number, e.g. 'show the map of plot 30 road 14'."
+            )
+            state["sql_query"] = "-- MAP_LOOKUP: could not parse plot/road"
+            state["sql_rows"] = []
+            state["geometry"] = None
+            state["error"] = None
+            return state
+
+        # Fuzzy-match against canonical plot/road values in DB
+        plot = self._fuzzy_match_column("plot_no", plot_raw, threshold=80)
+        road = self._fuzzy_match_column("road_no", road_raw, threshold=65)
+
+        # Resolve PRA
+        pra_sql, pra_rows = lookup_pra_for_plot_road(plot, road)
+
+        # No matching property at all
+        if not pra_rows:
+            state["final_answer"] = (
+                f"I couldn't find any property for plot {plot} and road {road}, "
+                "so I don't have a map to show."
+            )
+            state["sql_query"] = pra_sql
+            state["sql_rows"] = []
+            state["geometry"] = None
+            state["error"] = None
+            return state
+
+        # More than one PRA for that plot/road
+        if len(pra_rows) > 1:
+            pras = [r.get("pra") for r in pra_rows if r.get("pra")]
+            pras_list = ", ".join(pras) if pras else "N/A"
+
+            state["final_answer"] = (
+                f"There are multiple properties for plot {plot} and road {road}.\n"
+                f"Matching PRAs: {pras_list}.\n"
+                "Please specify exactly which PRA you want the map for, e.g. "
+                "'show the map for PRA 23|18|Punjabi Bagh East'."
+            )
+            state["sql_query"] = pra_sql
+            state["sql_rows"] = pra_rows
+            state["geometry"] = None
+            state["error"] = None
+            return state
+
+        # Exactly one PRA
+        pra = pra_rows[0].get("pra")
+        if not pra:
+            state["final_answer"] = (
+                f"I found one property for plot {plot} and road {road}, "
+                "but it does not have a PRA stored, so I can't fetch a map."
+            )
+            state["sql_query"] = pra_sql
+            state["sql_rows"] = pra_rows
+            state["geometry"] = None
+            state["error"] = None
+            return state
+
+        # Fetch geometry from pbchs_map
+        map_sql, map_rows = fetch_map_for_pra(pra)
+
+        if not map_rows:
+            state["final_answer"] = (
+                f"I found property {pra} for plot {plot} and road {road}, "
+                "but there is currently no map geometry stored for it."
+            )
+            state["sql_query"] = map_sql
+            state["sql_rows"] = []
+            state["geometry"] = None
+            state["error"] = None
+            return state
+
+        # Extract GeoJSON geometries for the full-stack team
+        geometry: list[dict] = []
+        for row in map_rows:
+            feature = row.get("feature")
+            if isinstance(feature, dict) and "geometry" in feature:
+                geometry.append(feature["geometry"])
+
+        state["final_answer"] = (
+            f"Map geometry is available for property {pra} (plot {plot}, road {road}). "
+            "I've returned the GeoJSON feature(s) that your frontend can render."
+        )
+        state["sql_query"] = map_sql
+        state["sql_rows"] = map_rows
+        state["geometry"] = geometry
+        state["error"] = None
+        return state
+
 
     def extract_entities(self, state: ChatbotState) -> ChatbotState:
         """Extract and enrich entities"""
@@ -1016,10 +1289,13 @@ LIMIT 5;
             standalone_question=state["standalone_info"]["standalone_question"],
             sql_query=state["sql_query"],
             sql_rows=state["sql_rows"],
-            history_messages=state["history_messages"]
+            history_messages=state["history_messages"],
+            on_token=self.on_token,
         )
         state["final_answer"] = final_answer
+        state["geometry"] = None
         return state
+
     
     def save_history(self, state: ChatbotState) -> ChatbotState:
         """Save conversation to history in Mongo."""
@@ -1045,10 +1321,23 @@ LIMIT 5;
         return state
 
     
-    def run(self, user_query: str) -> tuple[str, str, list[dict]]:
+    @traceable(run_type="chain", name="property_chatbot_graph")
+    def run(
+        self,
+        user_query: str,
+        on_token: Callable[[str], None] | None = None,
+    ) -> tuple[str, str, list[dict], Optional[list[dict]]]:
+
         """Run the graph"""
+
+        # Install streaming callback for this run
+        self.on_token = on_token
+
         initial_state: ChatbotState = {
+            # Input
             "user_query": user_query,
+
+            # Intermediate results
             "history_messages": [],
             "classification": {},
             "ner_entities": {},
@@ -1057,16 +1346,28 @@ LIMIT 5;
             "schema_matches": [],
             "sql_query": "",
             "sql_rows": [],
+
+            # Output
             "final_answer": "",
             "error": None,
+
+            # Note-summary extras
             "note_pra": None,
             "note_pdf_path": None,
+
+            # Map extras
+            "geometry": None,
         }
-        
+
         final_state = self.graph.invoke(initial_state)
-        
+
+        # Clear callback so it doesn't leak into the next run
+        self.on_token = None
+
         return (
             final_state["final_answer"],
             final_state["sql_query"],
-            final_state["sql_rows"]
+            final_state["sql_rows"],
+            final_state.get("geometry"),
         )
+

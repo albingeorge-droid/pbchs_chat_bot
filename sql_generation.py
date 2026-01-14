@@ -4,6 +4,9 @@ import re
 
 from openai_client import GroqClient
 from prompts import SQL_GENERATION_SYSTEM_PROMPT, TABLE_SCHEMAS
+from langsmith import traceable
+
+
 
 def _build_sql_prompt(
     standalone_question: str,
@@ -12,12 +15,20 @@ def _build_sql_prompt(
     sql_example_docs: List[Dict[str, Any]],
 ) -> str:
     # Use ALL table schemas instead of only top-K matches from Chroma.
-    all_schema_blocks = []
-    for item in TABLE_SCHEMAS:
-        table_name = item.get("table", "")
-        desc = item.get("description", "")
-        all_schema_blocks.append(f"Table {table_name}:\n{desc}")
-    schema_text = "\n\n".join(all_schema_blocks)
+    schema_blocks = []
+    for match in schema_docs or []:
+        doc_text = match.get("document") or ""
+        meta = match.get("metadata") or {}
+        table_name = meta.get("table") or ""
+
+        # _build_schema_docs in vector_store already prefixes with
+        # "Table {table} description:", so doc_text is usually enough.
+        if table_name:
+            schema_blocks.append(f"Table {table_name}:\n{doc_text}")
+        else:
+            schema_blocks.append(doc_text)
+
+    schema_text = "\n\n".join(schema_blocks)
 
     # ---------- Build examples block: question + SQL ----------
     examples_lines = []
@@ -51,9 +62,6 @@ You will write a PostgreSQL SELECT query for the Property Ownership database.
 User standalone question:
 {standalone_question}
 
-Extracted entities / hints:
-{ner_text or '(none)'}
-
 Relevant schema snippets:
 {schema_text or '(none)'}
 
@@ -78,6 +86,7 @@ def clean_sql(response_text: str) -> str:
         sql += ";"
     return sql.strip()
 
+@traceable(run_type="chain", name="generate_sql")
 def generate_sql(
     llm: GroqClient,
     standalone_question: str,

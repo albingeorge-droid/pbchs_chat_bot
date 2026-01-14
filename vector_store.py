@@ -4,6 +4,8 @@ from typing import List, Dict, Any, Tuple
 import chromadb
 from chromadb import Documents, Metadatas, IDs
 
+from langsmith import traceable
+
 from config import settings
 from embedding_client import SentenceEmbeddingClient
 from prompts import TABLE_SCHEMAS, SQL_EXAMPLES
@@ -29,6 +31,20 @@ class PropertyVectorStore:
 
 
         self.embedder = embedder or SentenceEmbeddingClient()
+
+        # 🔍 Auto-bootstrap vector DB if empty
+        try:
+            count = self.collection.count()
+        except Exception:
+            # If count() is not available / blows up, treat as empty
+            count = 0
+
+        if count == 0:
+            print(
+                f"[VectorStore] No vectors found in collection "
+                f"'{self.collection_name}' — rebuilding index..."
+            )
+            self.rebuild_index()
 
     # ---------- Bootstrap / upsert ----------
 
@@ -95,6 +111,7 @@ class PropertyVectorStore:
         return docs, ids, metas
 
 
+    @traceable(run_type="chain", name="rebuild_index")
     def rebuild_index(self):
         """
         Wipe and rebuild the Chroma collection for:
@@ -158,6 +175,7 @@ class PropertyVectorStore:
         }
     # ---------- Query helpers ----------
 
+    @traceable(run_type="retriever", name="query_sql_examples")
     def query_sql_examples(
         self, question: str, top_k: int = 5
     ) -> List[Dict[str, Any]]:
@@ -190,6 +208,7 @@ class PropertyVectorStore:
             )
         return matches
 
+    @traceable(run_type="retriever", name="query_schema")
     def query_schema(self, question: str, top_k: int = 5) -> List[Dict[str, Any]]:
         """
         Retrieve top-k schema docs relevant to the question.
@@ -232,4 +251,4 @@ if __name__ == "__main__":
     store.rebuild_index()
     print("✅ Chroma index rebuilt.")
 
-# python -m vector_store
+# python -m utils.chat_help_langGraph_Openai.vector_store

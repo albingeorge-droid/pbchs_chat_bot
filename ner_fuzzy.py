@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Any
 from openai_client import GroqClient
-
+from langsmith import traceable
 
 
 NER_SYSTEM_PROMPT = """
@@ -32,6 +32,7 @@ Rules:
 - Keep plot/road numbers exactly as written (may include letters or separators like "/", "-", etc.).
 """
 
+@traceable(run_type="chain", name="extract_property_entities")
 def extract_property_entities(query: str, llm: GroqClient) -> Dict[str, Any]:
     user_prompt = f"User query: {query}\n\nReturn the JSON now."
     # ner_fuzzy.py (inside extract_property_entities)

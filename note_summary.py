@@ -1,3 +1,4 @@
+from langsmith import traceable
 
 from db import run_select
 from openai_client import GroqClient
@@ -36,6 +37,7 @@ from typing import List, Dict, Tuple
 import os
 
 
+@traceable(run_type="chain", name="generate_property_note_pdf")
 def generate_property_note_pdf(
     llm: GroqClient,
     pra: str,
@@ -146,10 +148,22 @@ def generate_property_note_pdf(
 
     # Title: 28|6|Punjabi Bagh East (centered, underlined)
     # ----- Pretty title from PRA -----
-    # PRA format is "plot|road|Punjabi Bagh East/West"
-    parts = [p.strip() for p in pra.split("|")]
-    if len(parts) == 3:
-        plot_no, road_no, area = parts
+    # PRA is usually "id|plot|road|Punjabi Bagh East/West"
+    # but we still support the old "plot|road|area" format.
+    parts = [p.strip() for p in pra.split("|") if p.strip()]
+
+    # default fallbacks
+    title_text = pra
+    property_ref = pra  # will be used later in "Present owners..." line
+
+    if len(parts) >= 3:
+        if len(parts) == 3:
+            # old format: plot|road|area
+            plot_no, road_no, area = parts
+        else:
+            # new format: id|plot|road|area (ignore the first id)
+            _, plot_no, road_no, *rest = parts
+            area = rest[0] if rest else ""
 
         # Optional: turn "Punjabi Bagh East" -> "East Punjabi Bagh"
         area_words = area.split()
@@ -163,10 +177,9 @@ def generate_property_note_pdf(
         else:
             pretty_area = area
 
-        title_text = f"Plot no. {plot_no} Road no. {road_no} {pretty_area}"
-    else:
-        # Fallback: just use PRA as-is
-        title_text = pra
+        title_text = f"Plot no. {plot_no} Road no. {road_no} {pretty_area}".strip()
+        property_ref = f"plot {plot_no}, road {road_no}, {pretty_area}".strip(" ,")
+
 
     # Title (centered, underlined)
     pdf.set_font("Arial", "BU", 14)

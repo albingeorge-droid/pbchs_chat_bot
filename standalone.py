@@ -4,6 +4,8 @@ import json
 from typing import Dict, Any, List
 from openai_client import GroqClient
 from prompts import STANDALONE_QUESTION_PROMPT
+from langsmith import traceable
+
 
 PRONOUNS = {"him", "her", "them", "their", "his", "hers", "it", "its", "that", "this"}
 
@@ -221,6 +223,7 @@ def _normalize_property_words_to_plot(text: str) -> str:
 
     return re.sub(r"\bproperties\b|\bproperty\b", repl, text, flags=re.IGNORECASE)
 
+@traceable(run_type="chain", name="build_standalone_question")
 def build_standalone_question(
     llm: GroqClient,
     raw_query: str,

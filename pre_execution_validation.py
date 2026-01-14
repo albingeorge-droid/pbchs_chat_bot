@@ -7,6 +7,8 @@ from sqlglot import parse_one, expressions as exp
 from sqlglot.errors import ParseError
 from openai_client import GroqClient
 from prompts import SQL_GENERATION_SYSTEM_PROMPT
+from langsmith import traceable   # <-- ADD THIS
+
 
 # -----------------------------
 # Basic config / allow-lists
@@ -37,6 +39,7 @@ ALLOWED_TABLES: set[str] = {
     "share_certificates",
     "club_memberships",
     "misc_documents",
+    "pbchs_map",
 }
 
 # Per-table allowed columns, based on TABLE_SCHEMAS
@@ -58,6 +61,11 @@ ALLOWED_COLUMNS: Dict[str, set[str]] = {
         "initial_plot_size",
         "source_page",
         "flag",
+    },
+    "pbchs_map": {          # ✅ NEW BLOCK
+        "id",
+        "geom",
+        "properties",
     },
     "persons": {
         "id",
@@ -465,7 +473,11 @@ def clean_and_validate_sql(sql: str) -> tuple[str, Dict[str, Any]]:
 # -----------------------------
 
 
-
+@traceable(
+    run_type="chain",
+    name="validate_and_maybe_regenerate_sql",
+    metadata={"stage": "sql_guardrail_repair"},
+)
 def validate_and_maybe_regenerate_sql(
     llm: GroqClient,
     sql_query: str,

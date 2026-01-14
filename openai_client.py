@@ -1,9 +1,12 @@
 from __future__ import annotations
 import json
 import re
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Iterable
+
+
 
 from openai import OpenAI
+from langsmith import traceable
 
 from config import settings
 
@@ -29,7 +32,36 @@ class GroqClient:
     # Core LLM call (this is what LangSmith traces)
     # ------------------------------------------------------------------
 
-
+    @traceable(
+        run_type="llm",
+        name="openai_chat_completion",
+        metadata={
+            "ls_provider": "openai",
+            "ls_model_name": settings.openai_chat_model,
+        },
+        process_inputs=lambda args: {
+            "messages": args.get("messages", []),
+            "model": settings.openai_chat_model,  # <-- use the real attribute
+        },
+        # How outputs + token usage appear in the trace
+        process_outputs=lambda resp: {
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": resp.choices[0].message.content or "",
+                }
+            ],
+            "usage_metadata": (
+                {
+                    "input_tokens": getattr(resp.usage, "prompt_tokens", None),
+                    "output_tokens": getattr(resp.usage, "completion_tokens", None),
+                    "total_tokens": getattr(resp.usage, "total_tokens", None),
+                }
+                if getattr(resp, "usage", None) is not None
+                else None
+            ),
+        },
+    )
     def _chat_completion(
         self,
         messages: List[Dict[str, str]],
@@ -111,4 +143,37 @@ class GroqClient:
                 except Exception:
                     pass
             return {}
+        
+    def stream_text(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int = 8000,
+        temperature: float = 0.8,
+    ) -> Iterable[str]:
+        """
+        Streaming version of generate_text.
+
+        Yields chunks of the assistant reply as they arrive.
+        Caller is responsible for printing/collecting them.
+        """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        stream = self.client.chat.completions.create(
+            model=self.chat_model,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stream=True,
+        )
+
+        for chunk in stream:
+            # For streaming, content is in choices[0].delta.content
+            delta = chunk.choices[0].delta.content or ""
+            if delta:
+                yield delta
+
 

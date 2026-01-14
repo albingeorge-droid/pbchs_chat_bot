@@ -1,11 +1,14 @@
 from __future__ import annotations
 from typing import List, Dict, Any
 
+from langsmith import traceable
+
 from openai_client import GroqClient
 from prompts import QUERY_CLASSIFICATION_SYSTEM_PROMPT
 import re
 
 
+@traceable(run_type="chain", name="classify_query")
 def classify_property_query(
     llm: GroqClient,
     user_query: str,

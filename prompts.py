@@ -71,7 +71,7 @@ If the user's query is classified as "small_talk", respond in exactly TWO lines:
 
 Line 1: Give a short, friendly small-talk reply (max 1 sentence).
 Line 2: Exactly this text (match spelling/case exactly):
-Ask anything related to Punjabhi Bagh Housing Society
+Ask anything related to Punjabi Bagh Housing Society
 
 Rules:
 - Do not add any extra lines.
@@ -89,7 +89,7 @@ Act like a normal human.
 If the user's query is classified as "irrelevant_question", respond with exactly ONE line:
 
 Exactly this text (match spelling/case exactly):
-This is an irrelavnat question please ask question related to Punjabhi Bagh Housing Society
+This is an irrelevant question please ask question related to Punjabhi Bagh Housing Society
 
 Rules:
 - Always output the exact line above, even if the user asks to delete/update/append/remove/drop/insert/edit/change something.
@@ -747,12 +747,14 @@ LIMIT 50;        """.strip(),
         "question": "Show club membership details for the plot 30 road 14",
         "tables": ["club_memberships", "persons", "properties"],
         "sql": """
-SELECT T1.membership_number, T2.name, T3.file_name, 
-       T1.allocation_date, T1.membership_end_date
-FROM club_memberships AS T1
-JOIN persons AS T2 ON T1.member_id = T2.id
-JOIN properties AS T3 ON T1.property_id = T3.id
-WHERE T3.pra ILIKE '%30|14|Punjabi Bagh East%'
+SELECT T2.plot_no, T2.road_no, T2.street_name,
+       T3.membership_number, T3.allocation_date, T3.membership_end_date,
+       T4.name AS member_name
+FROM properties AS T1
+JOIN property_addresses AS T2 ON T1.id = T2.property_id
+JOIN club_memberships AS T3 ON T1.id = T3.property_id
+JOIN persons AS T4 ON T3.member_id = T4.id
+WHERE T2.plot_no ILIKE '%30%' AND T2.road_no ILIKE '%14%'
 LIMIT 50;
         """.strip(),
     },
@@ -827,7 +829,7 @@ WHERE pra LIKE '%Punjabi Bagh East%';
     },
     {
         "id": "ex34",
-        "question": "How many properties does Yogesh own and also name that property",
+        "question": "How many properties does Yogesh Berry own and also name that property",
         "tables": ["properties","property_addresses","current_owners","persons"],
         "sql": """
 SELECT COUNT(T1.id) AS total_properties,
@@ -837,7 +839,7 @@ FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
 JOIN current_owners AS T3 ON T1.id = T3.property_id
 JOIN persons AS T4 ON T3.buyer_id = T4.id
-WHERE T4.name ILIKE '%Yogesh%'
+WHERE T4.name ILIKE '%Yogesh Berry%'
 GROUP BY T2.plot_no, T2.road_no, T2.street_name, T4.name, T3.buyer_portion
 LIMIT 50;
         """.strip(),
@@ -1197,8 +1199,7 @@ FINAL_RESPONSE_SYSTEM_PROMPT = """
 You are a helpful assistant for Punjabi Bagh Housing Society property queries.
 
 You will be given:
-- The user's question
-- The executed SQL query (for your internal understanding ONLY)
+- The user's standalone  question
 - The total number of rows returned
 - The result rows in JSON (these rows are the source of truth)
 
