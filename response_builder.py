@@ -90,7 +90,10 @@ def build_final_answer(
     """
     Use groq to produce a user-facing explanation of the SQL results.
     """
-    safe_sql_rows = _strip_hidden_fields(sql_rows)
+    # NEW: Only take first 15 rows for LLM processing
+    limited_rows = sql_rows[:15]
+
+    safe_sql_rows = _strip_hidden_fields(limited_rows)
     rows_json = json.dumps(
         safe_sql_rows,
         ensure_ascii=False,
