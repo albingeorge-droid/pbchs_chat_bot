@@ -2,8 +2,8 @@ from __future__ import annotations
 from typing import List, Dict, Any, Tuple
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine, Result
-from .config import get_database_url
-from .pre_execution_validation import clean_and_validate_sql, SQLValidationError
+from config import get_database_url
+from pre_execution_validation import clean_and_validate_sql, SQLValidationError
 import re
 from langsmith import traceable
 

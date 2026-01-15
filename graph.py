@@ -23,13 +23,13 @@ from prompts import (
     SQL_GENERATION_SYSTEM_PROMPT,
     NOTE_SUMMARY_SYSTEM_PROMPT,   # NEW
 )
-from .map import (
+from map import (
     parse_plot_road_from_text,
     lookup_pra_for_plot_road,
     fetch_map_for_pra,
 )
 
-from .note_summary import generate_property_note_pdf  # NEW
+from note_summary import generate_property_note_pdf  # NEW
 from sqlalchemy.exc import ProgrammingError
 from rapidfuzz import fuzz, process
 
