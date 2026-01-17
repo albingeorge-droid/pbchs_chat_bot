@@ -60,7 +60,7 @@ def generate_property_note_pdf(
     FROM current_owners AS T1
     JOIN persons AS T2 ON T1.buyer_id = T2.id
     JOIN properties AS T3 ON T1.property_id = T3.id
-    WHERE T3.pra = '{safe_pra}'
+    WHERE T3.pra_ = '{safe_pra}'
     LIMIT 50;
     """.strip()
 
@@ -78,7 +78,7 @@ def generate_property_note_pdf(
     JOIN sale_deeds AS T4 ON T2.sale_deed_id = T4.id
     JOIN ownership_sellers AS T6 ON T6.ownership_id = T2.id
     JOIN persons AS T5 ON T5.id = T6.person_id
-    WHERE T1.pra = '{safe_pra}'
+    WHERE T1.pra_ = '{safe_pra}'
     LIMIT 50;
     """.strip()
 
@@ -90,7 +90,7 @@ def generate_property_note_pdf(
     SELECT T2.initial_plot_size
     FROM properties AS T1
     JOIN property_addresses AS T2 ON T1.id = T2.property_id
-    WHERE T1.pra = '{safe_pra}'
+    WHERE T1.pra_ = '{safe_pra}'
     LIMIT 1;
     """.strip()
     initial_size_rows = run_select(sql_initial_size) or []
@@ -109,7 +109,7 @@ def generate_property_note_pdf(
     FROM properties AS T1
     JOIN share_certificates AS T2 ON T1.id = T2.property_id
     JOIN persons AS T3 ON T2.member_id = T3.id
-    WHERE T1.pra = '{safe_pra}'
+    WHERE T1.pra_ = '{safe_pra}'
     LIMIT 50;
     """.strip()
     share_rows = run_select(sql_share) or []
@@ -124,7 +124,7 @@ def generate_property_note_pdf(
     FROM club_memberships AS T1
     JOIN persons AS T2 ON T1.member_id = T2.id
     JOIN properties AS T3 ON T1.property_id = T3.id
-    WHERE T3.pra = '{safe_pra}'
+    WHERE T3.pra_ = '{safe_pra}'
     LIMIT 50;
     """.strip()
     club_rows = run_select(sql_club) or []

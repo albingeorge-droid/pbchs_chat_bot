@@ -11,40 +11,54 @@ from db import run_select
 
 def parse_plot_road_from_text(text: str) -> Tuple[str | None, str | None]:
     """
-    Extract (plot_no, road_no) from a natural-language question like:
-      - "show the map of plot 30 road 15"
-      - "map 30/14"
-      - "map for plot 42 on road 7"
-
-    Returns (plot, road) or (None, None) if not found.
+    Extract (plot_no, road_no) from a natural-language question.
+    
+    Both plot and road can be numbers OR text:
+    - "show the map of plot 30 road 14" → ("30", "14")
+    - "map 28/east avenue" → ("28", "east avenue")
+    - "map corner/main" → ("corner", "main")
     """
     if not text:
         return None, None
 
     s = text.lower()
-
     plot = None
     road = None
 
-    # 1) explicit "plot 30" / "road 15"
-    m_plot = re.search(r"plot\s+(\d{1,4})", s)
+    # 1) Explicit "plot X" / "road Y" patterns (X and Y can be numbers or text)
+    m_plot = re.search(r"plot\s+([a-z0-9]+(?:\s+[a-z]+)?)", s)
     if m_plot:
-        plot = m_plot.group(1)
+        plot = m_plot.group(1).strip()
 
-    m_road = re.search(r"road\s+(\d{1,4})", s)
+    m_road = re.search(r"road\s+([a-z0-9]+(?:\s+[a-z]+)*)", s)
     if m_road:
-        road = m_road.group(1)
+        road = m_road.group(1).strip()
 
-    # 2) pattern "30/14" or "30 14" if one of them is still missing
+    # 2) Pattern "X/Y" where X and Y can be numbers OR text
     if not (plot and road):
-        m_pair = re.search(r"\b(\d{1,4})\s*[/ ]\s*(\d{1,4})\b", s)
+        # Match "30/14", "28/east avenue", "corner/main", etc.
+        m_pair = re.search(r"\b([a-z0-9]+)\s*/\s*([a-z0-9]+(?:\s+[a-z]+)*)\b", s)
         if m_pair:
             if not plot:
-                plot = m_pair.group(1)
+                plot = m_pair.group(1).strip()
             if not road:
-                road = m_pair.group(2)
+                road = m_pair.group(2).strip()
+
+    # 3) Pattern "X Y" (space-separated, both can be text or numbers)
+    # Example: "map 30 14", "map corner main"
+    # ⚠️ Be careful: this is very greedy and might match unrelated words
+    # Only use if we didn't find plot/road yet and context suggests map query
+    if not (plot and road) and "map" in s:
+        # Look for two consecutive words after "map" or "map of"
+        m_pair = re.search(r"\bmap\s+(?:of\s+)?([a-z0-9]+)\s+([a-z0-9]+)", s)
+        if m_pair:
+            if not plot:
+                plot = m_pair.group(1).strip()
+            if not road:
+                road = m_pair.group(2).strip()
 
     return plot, road
+
 
 
 @traceable(run_type="chain", name="map_lookup_pra")
@@ -58,12 +72,12 @@ def lookup_pra_for_plot_road(plot: str, road: str) -> tuple[str, List[Dict[str, 
     safe_road = road.replace("'", "''")
 
     sql = f"""
-SELECT p.pra
+SELECT p.pra_
 FROM properties p
 JOIN property_addresses pa
   ON pa.property_id = p.id
-WHERE TRIM(pa.plot_no) = '{safe_plot}'
-  AND TRIM(pa.road_no) = '{safe_road}'
+WHERE LOWER(TRIM(pa.plot_no)) = LOWER('{safe_plot}')
+  AND LOWER(TRIM(pa.road_no)) = LOWER('{safe_road}')
 LIMIT 5;
 """.strip()
 

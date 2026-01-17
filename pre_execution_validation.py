@@ -46,7 +46,7 @@ ALLOWED_TABLES: set[str] = {
 ALLOWED_COLUMNS: Dict[str, set[str]] = {
     "properties": {
         "id",
-        "pra",
+        "pra_",
         "file_no",
         "file_name",
         "file_link",

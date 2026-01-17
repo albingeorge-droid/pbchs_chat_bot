@@ -56,7 +56,7 @@ def _extract_last_property_from_history(
 
     Looks backwards through history for either:
     - a full PRA like "30|14|Punjabi Bagh East", or
-    - a "plot X ... road Y" pattern, optionally with Punjabi Bagh East/West.
+    - a "plot X ... road Y" pattern, where Y can be numeric or text (e.g. "East Avenue Road")
 
     Returns a dict that may contain: pra, plot_no, road_no, area.
     """
@@ -85,7 +85,8 @@ def _extract_last_property_from_history(
                 result["area"] = parts[2]
             return result
 
-        # 2) "plot X ... road Y" pattern
+        # 2) "plot X ... road Y" pattern - FIXED to handle both numeric and text roads
+        # Try numeric road first
         m_pr = re.search(
             r"plot\s*(\d+).*?road\s*(\d+)",
             text,
@@ -93,6 +94,26 @@ def _extract_last_property_from_history(
         )
         if m_pr:
             plot_no, road_no = m_pr.group(1), m_pr.group(2)
+            result: Dict[str, str] = {"plot_no": plot_no, "road_no": road_no}
+            m_area = re.search(
+                r"Punjabi Bagh\s+(East|West)",
+                text,
+                flags=re.IGNORECASE,
+            )
+            if m_area:
+                result["area"] = f"Punjabi Bagh {m_area.group(1).title()}"
+            return result
+
+        # 2b) NEW: Try text-based road names like "East Avenue Road", "North Avenue Road"
+        # Pattern: "plot <number> ... <road name containing 'road'>"
+        m_pr_text = re.search(
+            r"plot\s*(\d+).*?((?:[A-Z][a-z]*\s+)*[A-Z][a-z]*\s+Road)",
+            text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if m_pr_text:
+            plot_no = m_pr_text.group(1)
+            road_no = m_pr_text.group(2).strip()  # e.g. "East Avenue Road"
             result: Dict[str, str] = {"plot_no": plot_no, "road_no": road_no}
             m_area = re.search(
                 r"Punjabi Bagh\s+(East|West)",

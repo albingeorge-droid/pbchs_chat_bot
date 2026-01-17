@@ -190,8 +190,12 @@ class PropertyChatbotGraph:
         """
         Detect 'show the map...' style questions.
 
-        Very simple heuristic: must contain 'map' and either 'plot'/'road'
-        or look like 'map 30/14'.
+        Patterns to catch:
+        - "show map of plot 30 road 14"
+        - "map 30/14" (both numbers)
+        - "show map of 28/east avenue" (number/text)
+        - "show map of corner plot/main road" (text/text)
+        - "map for plot 42"
         """
         if not text:
             return False
@@ -201,16 +205,29 @@ class PropertyChatbotGraph:
         if "map" not in base:
             return False
 
-        # strong hints
+        # Strong hints: contains "plot" or "road" keywords
         if "plot" in base or "road" in base:
             return True
 
-        # fallback: "map 30/14" etc
-        if re.search(r"\bmap\s+(\d{1,4})\s*[/ ]\s*(\d{1,4})\b", base):
+        # ✅ UPDATED: Pattern "X/Y" or "X Y" where X and Y can be numbers OR text
+        # This catches:
+        # - "30/14" (number/number)
+        # - "28/east avenue" (number/text)
+        # - "corner/main" (text/text)
+        # - "plot a/road 5" (text/number)
+        if re.search(r"\bmap\s+(?:of\s+)?([a-z0-9]+)\s*[/]\s*([a-z0-9\s]+)", base):
+            return True
+
+        # ✅ Pattern: "map X Y" (space-separated, both can be text or numbers)
+        # Example: "map 30 14", "map corner main"
+        if re.search(r"\bmap\s+(?:of\s+)?([a-z0-9]+)\s+([a-z0-9]+)", base):
+            return True
+
+        # ✅ Generic "show/display/get map of/for" - catches most map requests
+        if re.search(r"\b(?:show|display|get|fetch|view)\s+(?:the\s+)?map\s+(?:of|for)\b", base):
             return True
 
         return False
-
 
 
 
@@ -320,7 +337,7 @@ class PropertyChatbotGraph:
         self,
         column: str,
         raw_value: str,
-        threshold: int = 65,
+        threshold: int = 100,
     ) -> str:
         """
         Fuzzy match a user-entered value against distinct values
@@ -344,7 +361,7 @@ SELECT DISTINCT TRIM({safe_column}) AS val
 FROM property_addresses
 WHERE {safe_column} IS NOT NULL
   AND TRIM({safe_column}) <> ''
-LIMIT 5000;
+LIMIT 200;
 """.strip()
 
         rows = run_select(sql_distinct) or []
@@ -381,7 +398,7 @@ SELECT DISTINCT TRIM(name) AS val
 FROM persons
 WHERE name IS NOT NULL
   AND TRIM(name) <> ''
-LIMIT 45000;
+LIMIT 200;
 """.strip()
 
         rows = run_select(sql_distinct) or []
@@ -719,7 +736,7 @@ LIMIT 45000;
         Apply fuzzy matching against property_addresses.plot_no.
         """
         raw_plot = state["user_query"].strip()
-        matched_plot = self._fuzzy_match_column("plot_no", raw_plot, threshold=80)
+        matched_plot = self._fuzzy_match_column("plot_no", raw_plot, threshold=98)
 
         self.note_flow["plot"] = matched_plot
         self.note_flow["step"] = "road"
@@ -748,7 +765,7 @@ LIMIT 45000;
         - Generate the note PDF
         """
         raw_road = state["user_query"].strip()
-        matched_road = self._fuzzy_match_column("road_no", raw_road, threshold=65)
+        matched_road = self._fuzzy_match_column("road_no", raw_road, threshold=98)
         self.note_flow["road"] = matched_road
 
         plot = (self.note_flow.get("plot") or "").strip()
@@ -760,12 +777,12 @@ LIMIT 45000;
 
         # 1) Look up PRA using plot + road
         sql_pra_lookup = f"""
-SELECT p.pra
+SELECT p.pra_
 FROM properties p
 JOIN property_addresses pa
   ON pa.property_id = p.id
-WHERE TRIM(pa.plot_no) = '{safe_plot}'
-  AND TRIM(pa.road_no) = '{safe_road}'
+WHERE LOWER(TRIM(pa.plot_no)) = LOWER('{safe_plot}')
+  AND LOWER(TRIM(pa.road_no)) = LOWER('{safe_road}')
 LIMIT 5;
 """.strip()
 
@@ -801,7 +818,7 @@ LIMIT 5;
 
         # Handle multiple matches
         if len(pra_rows) > 1:
-            pras = [row.get("pra") for row in pra_rows if row.get("pra")]
+            pras = [row.get("pra_") for row in pra_rows if row.get("pra_")]
             pras_list = ", ".join(pras) if pras else "N/A"
             answer = (
                 f"There are multiple properties for plot {plot} and road {road}.\n"
@@ -825,7 +842,7 @@ LIMIT 5;
             return state
 
         # Exactly one PRA found
-        pra = pra_rows[0].get("pra")
+        pra = pra_rows[0].get("pra_")
 
         if not pra:
             answer = (
@@ -887,19 +904,19 @@ LIMIT 5;
             return self.start_note_summary(state)
 
         # Fuzzy match plot + road
-        plot = self._fuzzy_match_column("plot_no", plot_raw.strip(), threshold=80)
-        road = self._fuzzy_match_column("road_no", road_raw.strip(), threshold=65)
+        plot = self._fuzzy_match_column("plot_no", plot_raw.strip(), threshold=98)
+        road = self._fuzzy_match_column("road_no", road_raw.strip(), threshold=98)
 
         safe_plot = plot.replace("'", "''")
         safe_road = road.replace("'", "''")
 
         sql_pra_lookup = f"""
-SELECT p.pra
+SELECT p.pra_
 FROM properties p
 JOIN property_addresses pa
   ON pa.property_id = p.id
-WHERE TRIM(pa.plot_no) = '{safe_plot}'
-  AND TRIM(pa.road_no) = '{safe_road}'
+WHERE LOWER(TRIM(pa.plot_no)) = LOWER('{safe_plot}')
+  AND LOWER(TRIM(pa.road_no)) = LOWER('{safe_road}')
 LIMIT 5;
 """.strip()
 
@@ -921,7 +938,7 @@ LIMIT 5;
 
         # Multiple matches
         if len(pra_rows) > 1:
-            pras = [row.get("pra") for row in pra_rows if row.get("pra")]
+            pras = [row.get("pra_") for row in pra_rows if row.get("pra_")]
             pras_list = ", ".join(pras) if pras else "N/A"
             state["final_answer"] = (
                 f"There are multiple properties for plot {plot} and road {road}.\n"
@@ -937,7 +954,7 @@ LIMIT 5;
             return state
 
         # Exactly one PRA
-        pra = pra_rows[0].get("pra")
+        pra = pra_rows[0].get("pra_")
         if not pra:
             state["final_answer"] = (
                 f"I found one property for plot {plot} and road {road}, "
@@ -987,15 +1004,15 @@ LIMIT 5;
                 "To show the property map, please tell me both the plot and "
                 "road number, e.g. 'show the map of plot 30 road 14'."
             )
-            state["sql_query"] = "-- MAP_LOOKUP: could not parse plot/road"
+            state["sql_query"] = "-- MAP_LOOKUP: could not parse plot/road ---"
             state["sql_rows"] = []
             state["geometry"] = None
             state["error"] = None
             return state
 
         # Fuzzy-match against canonical plot/road values in DB
-        plot = self._fuzzy_match_column("plot_no", plot_raw, threshold=80)
-        road = self._fuzzy_match_column("road_no", road_raw, threshold=65)
+        plot = self._fuzzy_match_column("plot_no", plot_raw, threshold=98)
+        road = self._fuzzy_match_column("road_no", road_raw, threshold=98)
 
         # Resolve PRA
         pra_sql, pra_rows = lookup_pra_for_plot_road(plot, road)
@@ -1014,7 +1031,7 @@ LIMIT 5;
 
         # More than one PRA for that plot/road
         if len(pra_rows) > 1:
-            pras = [r.get("pra") for r in pra_rows if r.get("pra")]
+            pras = [r.get("pra_") for r in pra_rows if r.get("pra_")]
             pras_list = ", ".join(pras) if pras else "N/A"
 
             state["final_answer"] = (
@@ -1030,7 +1047,7 @@ LIMIT 5;
             return state
 
         # Exactly one PRA
-        pra = pra_rows[0].get("pra")
+        pra = pra_rows[0].get("pra_")
         if not pra:
             state["final_answer"] = (
                 f"I found one property for plot {plot} and road {road}, "

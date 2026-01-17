@@ -251,4 +251,4 @@ if __name__ == "__main__":
     store.rebuild_index()
     print("✅ Chroma index rebuilt.")
 
-# python -m utils.chat_help_langGraph_Openai.vector_store
+# python -m vector_store

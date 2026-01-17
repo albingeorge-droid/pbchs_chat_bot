@@ -25,6 +25,11 @@ Classify ONLY the CURRENT user message into exactly one label:
      WITHOUT naming Punjabi Bagh explicitly, STILL treat it as "property_talk".
    - Assume all property-related questions are about Punjabi/Punjabhi Bagh by default,
      unless the user clearly talks about some other city/place.
+    - If a person name has already appeared in recent conversation
+    in relation to Punjabi Bagh properties, owners, or contact details,
+    then follow-up questions about that person (such as date of birth,
+    phone, email, PAN, Aadhaar, address, occupation) MUST be classified
+    as "property_talk", even if the current message mentions only the name.
 
    Example:
    - "how many plots are there"  --> label: "property_talk"
@@ -89,7 +94,7 @@ Act like a normal human.
 If the user's query is classified as "irrelevant_question", respond with exactly ONE line:
 
 Exactly this text (match spelling/case exactly):
-This is an irrelevant question please ask question related to Punjabhi Bagh Housing Society
+This is an irrelevant question please ask question related to Punjabi Bagh Housing Society
 
 Rules:
 - Always output the exact line above, even if the user asks to delete/update/append/remove/drop/insert/edit/change something.
@@ -108,10 +113,10 @@ TABLE_SCHEMAS = [
     {
         "table": "properties",
         "description": """
-Core property table containing high-level property information such pra, file_no, file_name.
+Core property table containing high-level property information such pra_, file_no, file_name.
 Columns:
 - id (String(36), PK): UUID primary key stored as string
-- pra (String(255), nullable): Property Reference Address/identifier (e.g. '47|77|Punjabi Bagh West')-> it is the combination of plot_no, road_no and street_name
+- pra_ (String(255), nullable): Property Reference Address/identifier (e.g. '47|77|Punjabi Bagh West')-> it is the combination of plot_no, road_no and street_name
 - file_no (String(255), nullable): Internal file tracking number->basically the initial integer from the file_name
 - file_name (String(255), nullable): Name or code of the property file-> its is the pdf name from which a single property data is extracted.
 - file_link (Text, nullable): URL/path to property documentation PDF
@@ -363,7 +368,7 @@ FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
 JOIN current_owners AS T3 ON T1.id = T3.property_id
 JOIN persons AS T4 ON T3.buyer_id = T4.id
-WHERE T2.plot_no Ilike '%30%' AND T2.road_no Ilike '%14%'
+WHERE T2.plot_no = '30' AND T2.road_no = '14'
 LIMIT 50;
         """.strip(),
     },
@@ -376,7 +381,7 @@ SELECT T2.name, T1.buyer_portion
 FROM current_owners AS T1
 JOIN persons AS T2 ON T1.buyer_id = T2.id
 JOIN properties AS T3 ON T1.property_id = T3.id
-WHERE T3.file_no ILIKE '%3447%'
+WHERE T3.file_no = '3447'
 LIMIT 50;
         """.strip(),
     },
@@ -413,7 +418,7 @@ LEFT JOIN persons AS T4 ON T3.buyer_id = T4.id
 LEFT JOIN sale_deeds AS T6 ON T3.sale_deed_id = T6.id
 LEFT JOIN ownership_sellers AS T5 ON T3.id = T5.ownership_id
 LEFT JOIN persons AS T7 ON T5.person_id = T7.id
-WHERE T2.plot_no Ilike '%30%' AND T2.road_no Ilike '%14%'
+WHERE T2.plot_no = '30' AND T2.road_no = '14'
 LIMIT 50;
         """.strip(),
     },
@@ -434,7 +439,7 @@ LEFT JOIN persons AS T4 ON T3.buyer_id = T4.id
 LEFT JOIN sale_deeds AS T6 ON T3.sale_deed_id = T6.id
 LEFT JOIN ownership_sellers AS T5 ON T3.id = T5.ownership_id
 LEFT JOIN persons AS T7 ON T5.person_id = T7.id
-WHERE T2.plot_no Ilike '%30%' AND T2.road_no Ilike '%14%'
+WHERE T2.plot_no = '30' AND T2.road_no = '14'
 LIMIT 50;
         """.strip(),
     },
@@ -543,7 +548,7 @@ LIMIT 50;
 SELECT T2.plot_no, T2.road_no, T2.initial_plot_size
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
-WHERE T2.plot_no Ilike '%30%' AND T2.road_no Ilike '%14%'
+WHERE T2.plot_no = '30' AND T2.road_no = '14'
 LIMIT 50;
         """.strip(),
     },
@@ -555,7 +560,7 @@ LIMIT 50;
 SELECT T2.plot_no, T2.road_no, T2.street_name ,T2.initial_plot_size
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
-WHERE T2.road_no ILIKE '%14%'
+WHERE T2.road_no = '14'
 LIMIT 50;
         """.strip(),
     },
@@ -564,9 +569,9 @@ LIMIT 50;
         "question": "What properties are in Punjabi Bagh West?",
         "tables": ["properties"],
         "sql": """
-SELECT pra
+SELECT pra_
 FROM properties
-WHERE pra ILIKE '%Punjabi Bagh West%'
+WHERE pra_ ILIKE '%Punjabi Bagh West%'
 LIMIT 50;
         """.strip(),
     },
@@ -582,7 +587,7 @@ SELECT T2.plot_no, T2.road_no, T2.street_name, T2.initial_plot_size,
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
 JOIN construction_details AS T3 ON T1.id = T3.property_id
-WHERE T2.plot_no Ilike '%30%' AND T2.road_no Ilike '%14%'
+WHERE T2.plot_no = '30' AND T2.road_no = '14'
 LIMIT 50;
         """.strip(),
     },
@@ -596,7 +601,7 @@ SELECT T2.plot_no, T2.road_no, T2.street_name,
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
 JOIN construction_details AS T3 ON T1.id = T3.property_id
-WHERE T2.plot_no Ilike '%30%' AND T2.road_no Ilike '%14%'
+WHERE T2.plot_no = '30' AND T2.road_no = '14'
 LIMIT 50;
         """.strip(),
     },
@@ -605,7 +610,7 @@ LIMIT 50;
         "question": "Show me properties with land price greater than 50000 per sqm",
         "tables": ["properties", "construction_details"],
         "sql": """
-SELECT T1.pra, T2.land_price_per_sqm, T2.construction_price_per_sqm
+SELECT T1.pra_, T2.land_price_per_sqm, T2.construction_price_per_sqm
 FROM properties AS T1
 JOIN construction_details AS T2 ON T1.id = T2.property_id
 WHERE T2.land_price_per_sqm != '' 
@@ -624,7 +629,7 @@ SELECT T2.plot_no, T2.road_no, T2.street_name,
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
 JOIN legal_details AS T3 ON T1.id = T3.property_id
-WHERE T2.plot_no Ilike '%30%' AND T2.road_no Ilike '%14%'
+WHERE T2.plot_no = '30' AND T2.road_no = '14'
 LIMIT 50;
         """.strip(),
     },
@@ -633,7 +638,7 @@ LIMIT 50;
         "question": "Show all properties with court cases",
         "tables": ["properties", "legal_details"],
         "sql": """
-SELECT T1.pra, T2.court_cases, T2.registrar_office
+SELECT T1.pra_, T2.court_cases, T2.registrar_office
 FROM properties AS T1
 JOIN legal_details AS T2 ON T1.id = T2.property_id
 WHERE T2.court_cases IS NOT NULL 
@@ -650,7 +655,7 @@ SELECT T2.plot_no, T2.road_no, T2.street_name,
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
 JOIN legal_details AS T3 ON T1.id = T3.property_id
-WHERE T2.plot_no Ilike '%30%' AND T2.road_no Ilike '%14%'
+WHERE T2.plot_no = '30' AND T2.road_no = '14'
 LIMIT 50;
         """.strip(),
     },
@@ -660,7 +665,7 @@ LIMIT 50;
         "question": "List all transactions after January 2010",
         "tables": ["properties", "ownership_records", "sale_deeds", "persons", "ownership_sellers"],
         "sql": """
-SELECT T1.pra, T3.name AS buyer_name, T5.name AS seller_name, 
+SELECT T1.pra_, T3.name AS buyer_name, T5.name AS seller_name, 
        (T4.signing_date->>0) AS signing_date,T2.buyer_portion
 FROM properties AS T1
 JOIN ownership_records AS T2 ON T1.id = T2.property_id
@@ -679,7 +684,7 @@ LIMIT 50;
         "question": "Show transactions between 2015 and 2020",
         "tables": ["properties", "ownership_records", "sale_deeds", "persons", "ownership_sellers"],
         "sql": """
-SELECT T1.pra,T3.name AS buyer_name, T5.name AS seller_name, T2.buyer_portion,
+SELECT T1.pra_,T3.name AS buyer_name, T5.name AS seller_name, T2.buyer_portion,
        (T4.signing_date->>0) AS signing_date
 FROM properties AS T1
 JOIN ownership_records AS T2 ON T1.id = T2.property_id
@@ -697,7 +702,7 @@ LIMIT 50;        """.strip(),
         "question": "What transactions happened in 2018?",
         "tables": ["properties", "ownership_records", "sale_deeds", "persons", "ownership_sellers"],
         "sql": """
-SELECT T1.pra,T3.name AS buyer_name, T5.name AS seller_name, T2.buyer_portion,
+SELECT T1.pra_,T3.name AS buyer_name, T5.name AS seller_name, T2.buyer_portion,
        (T4.signing_date->>0) AS signing_date
 FROM properties AS T1
 JOIN ownership_records AS T2 ON T1.id = T2.property_id
@@ -738,7 +743,7 @@ FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
 JOIN share_certificates AS T3 ON T1.id = T3.property_id
 JOIN persons AS T4 ON T3.member_id = T4.id
-WHERE T2.plot_no Ilike '%30%' AND T2.road_no Ilike '%14%'
+WHERE T2.plot_no = '30' AND T2.road_no = '14'
 LIMIT 50;        """.strip(),
     },
 
@@ -754,13 +759,13 @@ FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
 JOIN club_memberships AS T3 ON T1.id = T3.property_id
 JOIN persons AS T4 ON T3.member_id = T4.id
-WHERE T2.plot_no ILIKE '%30%' AND T2.road_no ILIKE '%14%'
+WHERE T2.plot_no = '30' AND T2.road_no = '14'
 LIMIT 50;
         """.strip(),
     },
     {
         "id": "ex29",
-        "question": "Find membership number CM456",
+        "question": "Find membership number 1649",
         "tables": ["club_memberships", "persons", "properties","property_addresses"],
         "sql": """
 SELECT T2.plot_no, T2.road_no, T2.street_name,
@@ -770,7 +775,7 @@ FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
 JOIN club_memberships AS T3 ON T1.id = T3.property_id
 JOIN persons AS T4 ON T3.member_id = T4.id
-WHERE T2.plot_no Ilike '%30%' AND T2.road_no Ilike '%14%'
+WHERE T3.membership_number = '1649'
 LIMIT 50;
         """.strip(),
     },
@@ -780,7 +785,7 @@ LIMIT 50;
         "question": "List all properties with their current owners and plot sizes",
         "tables": ["properties", "current_owners", "persons", "property_addresses"],
         "sql": """
-SELECT T1.pra, T3.name AS owner_name, T2.buyer_portion ,T4.initial_plot_size
+SELECT T1.pra_, T3.name AS owner_name, T2.buyer_portion ,T4.initial_plot_size
 FROM properties AS T1
 LEFT JOIN current_owners AS T2 ON T1.id = T2.property_id
 LEFT JOIN persons AS T3 ON T2.buyer_id = T3.id
@@ -824,7 +829,7 @@ LIMIT 50;
         "sql": """
 SELECT COUNT(*) AS property_count
 FROM properties
-WHERE pra LIKE '%Punjabi Bagh East%';
+WHERE pra_ LIKE '%Punjabi Bagh East%';
         """.strip(),
     },
     {
@@ -920,9 +925,16 @@ GROUP BY T1.id, T2.plot_no, T2.road_no ORDER BY COUNT(T3.id) DESC LIMIT 1;
     "question": "What are the top 10 plots according to their size?",
     "tables": ["properties", "property_addresses"],
     "sql": """
-SELECT T2.plot_no, T2.road_no, T2.initial_plot_size 
-FROM properties AS T1 
-JOIN property_addresses AS T2 ON T1.id = T2.property_id ORDER BY CAST(T2.initial_plot_size AS DECIMAL) DESC LIMIT 10;
+SELECT
+       T2.plot_no,
+       T2.road_no,
+       T2.initial_plot_size
+FROM properties AS T1
+JOIN property_addresses AS T2
+  ON T1.id = T2.property_id
+WHERE NULLIF(TRIM(T2.initial_plot_size), '') IS NOT NULL
+ORDER BY NULLIF(TRIM(T2.initial_plot_size), '')::DECIMAL DESC
+LIMIT 10;
     """.strip(),
 },
 {
@@ -930,11 +942,11 @@ JOIN property_addresses AS T2 ON T1.id = T2.property_id ORDER BY CAST(T2.initial
     "question": "What are the plots where court cases are maximum?",
     "tables": ["properties", "legal_details"],
     "sql": """
-SELECT T1.pra, COUNT(T2.court_cases) AS court_case_count 
+SELECT T1.pra_, COUNT(T2.court_cases) AS court_case_count 
 FROM properties AS T1 
 JOIN legal_details AS T2 ON T1.id = T2.property_id 
 WHERE NOT T2.court_cases IS NULL AND CAST(T2.court_cases AS TEXT) <> '[]' 
-GROUP BY T1.pra ORDER BY COUNT(T2.court_cases) DESC LIMIT 50;
+GROUP BY T1.pra_ ORDER BY COUNT(T2.court_cases) DESC LIMIT 50;
     """.strip(),
 },
 {
@@ -950,7 +962,7 @@ LEFT JOIN persons AS T4 ON T3.buyer_id = T4.id
 LEFT JOIN sale_deeds AS T6 ON T3.sale_deed_id = T6.id 
 LEFT JOIN ownership_sellers AS T5 ON T3.id = T5.ownership_id 
 LEFT JOIN persons AS T7 ON T5.person_id = T7.id 
-WHERE T2.plot_no ILIKE '%30%' AND T2.road_no ILIKE '%14%' LIMIT 50;
+WHERE T2.plot_no = '30' AND T2.road_no = '14' LIMIT 50;
     """.strip(),
 },
 {
@@ -958,7 +970,7 @@ WHERE T2.plot_no ILIKE '%30%' AND T2.road_no ILIKE '%14%' LIMIT 50;
     "question": "What transactions were done before the year 2000?",
     "tables": ["properties", "ownership_records","persons","sale_deeds","ownership_sellers"],
     "sql": """
-SELECT T1.pra, T3.name AS buyer_name, T5.name AS seller_name, T2.buyer_portion, (T4.signing_date ->> 0) AS signing_date 
+SELECT T1.pra_, T3.name AS buyer_name, T5.name AS seller_name, T2.buyer_portion, (T4.signing_date ->> 0) AS signing_date 
 FROM properties AS T1 
 JOIN ownership_records AS T2 ON T1.id = T2.property_id 
 JOIN persons AS T3 ON T2.buyer_id = T3.id 
@@ -980,7 +992,7 @@ LEFT JOIN ownership_records AS T3 ON T1.id = T3.property_id
 LEFT JOIN persons AS T4 ON T3.buyer_id = T4.id LEFT JOIN sale_deeds AS T6 ON T3.sale_deed_id = T6.id 
 LEFT JOIN ownership_sellers AS T5 ON T3.id = T5.ownership_id 
 LEFT JOIN persons AS T7 ON T5.person_id = T7.id 
-WHERE T2.plot_no ILIKE '%30%' AND T2.road_no ILIKE '%14%' LIMIT 50;
+WHERE T2.plot_no = '30' AND T2.road_no = '14' LIMIT 50;
     """.strip(),
 },
 {
@@ -993,7 +1005,7 @@ FROM properties AS T1 JOIN property_addresses AS T2 ON T1.id = T2.property_id
 LEFT JOIN ownership_records AS T3 ON T1.id = T3.property_id AND T3.transfer_type ILIKE '%sale%' 
 LEFT JOIN persons AS T4 ON T3.buyer_id = T4.id 
 LEFT JOIN sale_deeds AS T6 ON T3.sale_deed_id = T6.id 
-LEFT JOIN ownership_sellers AS T5 ON T3.id = T5.ownership_id LEFT JOIN persons AS T7 ON T5.person_id = T7.id WHERE T2.plot_no ILIKE '%5%' AND T2.road_no ILIKE '%East Avenue Road%' LIMIT 50;
+LEFT JOIN ownership_sellers AS T5 ON T3.id = T5.ownership_id LEFT JOIN persons AS T7 ON T5.person_id = T7.id WHERE T2.plot_no = '5' AND T2.road_no = 'East Avenue Road' LIMIT 50;
     """.strip(),
 },
 {
@@ -1030,7 +1042,58 @@ HAVING COUNT(DISTINCT T1.property_id) > 1
 ORDER BY total_properties DESC
 LIMIT 50;
     """.strip(),
-}
+},
+{
+    "id": "ex47",
+    "question": "Show the contact details of albin of plot 30 road 14",
+    "tables": ["persons", "current_owners", "properties", "property_addresses"],
+    "sql": """
+SELECT T1.name,
+       T1.phone_number,
+       T1.email,
+       T1.address,
+       T1.pan,
+       T1.aadhaar,
+       T1.occupation,
+       T3.plot_no,
+       T3.road_no,
+       T3.street_name
+FROM persons AS T1
+JOIN current_owners AS T2 ON T1.id = T2.buyer_id
+JOIN property_addresses AS T3 ON T2.property_id = T3.property_id
+WHERE T3.plot_no = '30' 
+  AND T3.road_no = '14'
+  AND LOWER(T1.name) LIKE '%albin%';
+    """.strip(),
+},
+
+    {
+        "id": "ex48",
+        "question": "What plots are located near East Avenue Road?",
+        "tables": ["properties", "property_addresses"],
+        "sql": """
+SELECT T2.plot_no, T2.road_no, T2.street_name ,T2.initial_plot_size
+FROM properties AS T1
+JOIN property_addresses AS T2 ON T1.id = T2.property_id
+WHERE T2.road_no = 'East Avenue Road'
+LIMIT 50;
+        """.strip(),
+    },
+
+    {
+        "id": "ex49",
+        "question": "What plots are near North Avenue Road?",
+        "tables": ["properties", "property_addresses"],
+        "sql": """
+SELECT T2.plot_no, T2.road_no, T2.street_name ,T2.initial_plot_size
+FROM properties AS T1
+JOIN property_addresses AS T2 ON T1.id = T2.property_id
+WHERE T2.road_no = 'North Avenue Road'
+LIMIT 50;
+        """.strip(),
+    },
+
+
 
 
 ]
@@ -1132,8 +1195,8 @@ Rules:
 - Output ONLY a single PostgreSQL SELECT query, ending with a semicolon.
 - Never modify data: no INSERT/UPDATE/DELETE/ALTER/DROP/TRUNCATE/GRANT/REVOKE.
 - Use the given schema and examples carefully.
-- Prefer ILIKE for case-insensitive text search.
-- If a PRA is given, filter on properties.pra.
+- Prefer ILIKE for case-insensitive text search FOR names ONLY.
+- If a PRA is given, filter on properties.pra_ .
 - If a file_name or file_no is given, filter on properties.file_name or properties.file_no (using ILIKE if partial).
 - If a person_name is given, filter on persons.name using ILIKE with wildcards.
 
@@ -1175,10 +1238,17 @@ Rules:
 Important column-specific rule:
 
 - sale_deeds.signing_date is stored as JSON/text like '28/01/1962' (DD/MM/YYYY).
-- Whenever you need a DATE from it, ALWAYS use:
-    to_date(alias.signing_date->>0, 'DD/MM/YYYY')
-  (where "alias" is the table alias, e.g. sd or sd2).
-- NEVER use CAST(... AS DATE) or ::date on signing_date->>0.
+    - Whenever you need a DATE from it, ALWAYS use:
+        to_date(alias.signing_date->>0, 'DD/MM/YYYY')
+    (where "alias" is the table alias, e.g. sd or sd2).
+    - NEVER use CAST(... AS DATE) or ::date on signing_date->>0.
+
+- Column initial_plot_size is TEXT. Whenever you need to order or filter
+  numerically on it, first exclude empty strings and cast like this:
+  WHERE NULLIF(TRIM(property_addresses.initial_plot_size), '') IS NOT NULL
+  ORDER BY NULLIF(TRIM(property_addresses.initial_plot_size), '')::DECIMAL ...
+
+
 
 Additional JSON rules:
 
@@ -1236,6 +1306,13 @@ OUTPUT FORMAT (VERY IMPORTANT):
    - List EACH transaction as a separate bullet in chronological order
      (oldest to newest if dates are available; otherwise keep the given order).
    - Use the columns that are present to answer the user’s question.
+   - IMPORTANT: Always include any fields explicitly asked about in the standalone question, if they are present in the provided data.
+        Examples:
+        - If the question asks for plot size / built-up / covered area, include initial_plot_size / coverage_built_up_area / total_covered_area (with "square yards" unit rule).
+        - If the question asks for sale deed number, include sale_deed_no when present.
+        - If the question asks for phone/email/address, include those contact fields when present.
+        Do not omit a requested field just because it is not listed in the default bullet template.
+
    - For this project, when available, each bullet SHOULD mention:
        • the property (pra and/or plot_no + road_no),
        • the buyer,
