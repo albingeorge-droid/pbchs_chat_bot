@@ -23,6 +23,19 @@ REFERENCE_TOKENS = PRONOUNS | {
 PERSON_PRONOUNS = {"him", "her", "them", "their", "his", "hers", "he", "she", "they"}
 PROPERTY_PRONOUNS = {"it", "its", "this", "that", "these", "those"}
 
+def _mentions_prior_context(user_query: str) -> bool:
+    """
+    Return True only when the user explicitly refers to earlier context.
+    If False, we should NOT allow the LLM to borrow plot/road/PRA from history.
+    """
+    q = (user_query or "").lower()
+    return bool(
+        re.search(r"\b(this|it|its|these|those|above|same|previous|earlier)\b", q)
+        or re.search(r"\b(same one|last one|the above|as above)\b", q)
+    )
+
+
+
 def _has_explicit_property_info(user_query: str, ner_entities: Dict[str, Any] | None) -> bool:
     ner_entities = ner_entities or {}
 
@@ -271,7 +284,12 @@ def build_standalone_question(
         ner_entities,
     )
 
-    history_json = json.dumps(history_messages[-6:], ensure_ascii=False, indent=2)
+    # Only pass history to the LLM if the user explicitly refers to prior context
+    use_history = _mentions_prior_context(raw_query)
+
+    history_for_prompt = history_messages[-6:] if use_history else []
+    history_json = json.dumps(history_for_prompt, ensure_ascii=False, indent=2)
+
     ner_json = json.dumps(ner_entities or {}, ensure_ascii=False, indent=2)
 
     user_prompt = STANDALONE_QUESTION_PROMPT.format(
@@ -294,6 +312,9 @@ def build_standalone_question(
             "'this plot', 'this property', or 'that file' in standalone_question.\n"
             "When history or NER lets you recover a specific property for a vague request, "
             "standalone_question must mention that property explicitly, not with pronouns.\n"
+            "If the current user query does NOT contain explicit reference words like "
+            "'this', 'it', 'above', 'same', 'previous', do NOT use chat history to infer "
+            "any plot/road/PRA/file identifiers.\n"
             "Return only the JSON object, with no extra text."
         ),
         user_prompt=user_prompt,
@@ -321,6 +342,13 @@ def build_standalone_question(
     # 🔽 NEW: enforce 'plot/plots' wording in outputs
     normalized = _normalize_property_words_to_plot(normalized)
     standalone = _normalize_property_words_to_plot(standalone)
+
+    # Guardrail: if the user did NOT reference prior context and did NOT provide identifiers,
+    # do NOT allow the model to inject plot/road/PRA from history.
+    if (not use_history) and (not _has_explicit_property_info(raw_query, ner_entities)):
+        if _has_explicit_property_info(standalone, None):
+            standalone = normalized
+
 
     return {
         "language": result.get("language", "english"),

@@ -44,18 +44,24 @@ def _remove_limit_clause(sql: str) -> str:
 
 
 @traceable(run_type="tool", name="run_select")
-def run_select(query: str) -> List[Dict[str, Any]]:
+def run_select(query: str, preserve_limit: bool = False) -> List[Dict[str, Any]]:
     """
     Validate query with shared guardrails, then execute.
+    
+    Args:
+        query: SQL query to execute
+        preserve_limit: If True, keep LIMIT clause; if False, remove it
     """
     try:
         safe_sql, _debug = clean_and_validate_sql(query)
     except SQLValidationError as e:
-        # Surface a simple error to callers, but keep original reason in message
         raise ValueError(f"Invalid SQL blocked by guardrails: {e}") from e
 
-    # NEW: Remove LIMIT clause before execution
-    final_sql = _remove_limit_clause(safe_sql)
+    # Only remove LIMIT if preserve_limit is False (default behavior)
+    if preserve_limit:
+        final_sql = safe_sql
+    else:
+        final_sql = _remove_limit_clause(safe_sql)
 
     with engine.connect() as conn:
         result: Result = conn.execute(text(final_sql))

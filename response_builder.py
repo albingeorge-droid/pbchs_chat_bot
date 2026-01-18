@@ -13,8 +13,6 @@ HIDDEN_FIELDS = {
     "buyer_id",
     "seller_id",
     "person_id",
-    "file_no",
-    "file_name",
     "qc_status",
     "flag",
     "status",

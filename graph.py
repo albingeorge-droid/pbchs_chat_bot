@@ -274,7 +274,32 @@ class PropertyChatbotGraph:
                 return True
 
         return False
-   
+
+    def _fetch_file_numbers_for_plot_road(self, plot: str, road: str) -> tuple[str, list[dict]]:
+        safe_plot = (plot or "").replace("'", "''")
+        safe_road = (road or "").replace("'", "''")
+
+        sql = f"""
+    SELECT DISTINCT TRIM(p.file_no) AS file_no
+    FROM properties p
+    JOIN property_addresses pa
+    ON pa.property_id = p.id
+    WHERE LOWER(TRIM(pa.plot_no)) = LOWER('{safe_plot}')
+    AND LOWER(TRIM(pa.road_no)) = LOWER('{safe_road}')
+    AND p.file_no IS NOT NULL
+    AND TRIM(p.file_no) <> ''
+    ORDER BY TRIM(p.file_no);
+    """.strip()
+
+        rows = run_select(sql) or []
+        return sql, rows
+
+    def _extract_file_no_from_text(self, text: str) -> str | None:
+        m = re.search(r"\bfile\s*(?:no\.?|number)?\s*[:#\-]?\s*(\d+)\b", text or "", re.IGNORECASE)
+        return m.group(1) if m else None
+
+
+
     def route_by_classification(self, state: ChatbotState) -> str:
         """
         Decide where to go after classification.
@@ -303,7 +328,15 @@ class PropertyChatbotGraph:
         # 3) Note-summary request (fuzzy)
         if self._is_note_summary_trigger(user_q_raw):
             # Try to see if user already gave plot+road in same sentence
-            plot_raw, road_raw = parse_plot_road_from_text(user_q_raw)
+            q_no_file = re.sub(
+                r"\bfor\s+file\s*(?:no\.?|number)?\b.*$",
+                "",
+                user_q_raw,
+                flags=re.IGNORECASE,
+            ).strip()
+
+            plot_raw, road_raw = parse_plot_road_from_text(q_no_file)
+
 
             if plot_raw and road_raw:
                 # Single-shot: don't run the interactive wizard
@@ -783,7 +816,7 @@ JOIN property_addresses pa
   ON pa.property_id = p.id
 WHERE LOWER(TRIM(pa.plot_no)) = LOWER('{safe_plot}')
   AND LOWER(TRIM(pa.road_no)) = LOWER('{safe_road}')
-LIMIT 5;
+LIMIT 1;
 """.strip()
 
         pra_rows = run_select(sql_pra_lookup) or []
@@ -817,22 +850,31 @@ LIMIT 5;
             return state
 
         # Handle multiple matches
-        if len(pra_rows) > 1:
-            pras = [row.get("pra_") for row in pra_rows if row.get("pra_")]
-            pras_list = ", ".join(pras) if pras else "N/A"
+        # ✅ NEW: If same plot/road has multiple file numbers, ask user to pick file_no
+        files_sql, file_rows = self._fetch_file_numbers_for_plot_road(plot, road)
+        file_nos = [r.get("file_no") for r in file_rows if r.get("file_no")]
+
+        if len(file_nos) > 1:
+            # pick any PRA (as you asked) – but we won't proceed until file_no is chosen
+            any_pra = pra_rows[0].get("pra_") if pra_rows else None  # optional, just "catch any one"
+
+            files_list = ", ".join(file_nos)
             answer = (
-                f"There are multiple properties for plot {plot} and road {road}.\n"
-                f"Matching PRAs: {pras_list}.\n"
-                "Please specify the exact PRA you want the note summary for."
+                f"There are multiple files for plot {plot} and road {road}.\n"
+                f"Available file numbers: {files_list}.\n"
+                f"Please specify the file number, e.g. "
+                f"'generate note summary of plot {plot}/{road} for file number <...>'."
             )
+
             state["final_answer"] = answer
-            state["sql_query"] = sql_pra_lookup
-            state["sql_rows"] = pra_rows
+            state["sql_query"] = files_sql
+            state["sql_rows"] = file_rows
             state["note_pra"] = None
             state["note_pdf_path"] = None
             state["error"] = None
+            state["geometry"] = None
 
-            # Reset wizard so user can start again with a precise PRA or new note flow
+            # Reset note wizard
             self.note_flow = {
                 "active": False,
                 "step": None,
@@ -868,6 +910,7 @@ LIMIT 5;
         summary_text, pdf_path, _current_rows, _history_rows = generate_property_note_pdf(
             llm=self.llm,
             pra=pra,
+            file_no=None,
         )
 
         # As per your requirement: do NOT show summary or path
@@ -897,7 +940,20 @@ LIMIT 5;
         We reuse the same PRA lookup + PDF logic as collect_road,
         but parse plot+road from the sentence instead of using note_flow.
         """
-        plot_raw, road_raw = parse_plot_road_from_text(state["user_query"])
+        raw_q = state["user_query"]
+
+        # 1) extract file number (keep as you already do)
+        file_no = self._extract_file_no_from_text(raw_q)
+
+        # 2) strip trailing "for file number ..." before parsing plot/road
+        q_no_file = re.sub(
+            r"\bfor\s+file\s*(?:no\.?|number)?\b.*$",
+            "",
+            raw_q,
+            flags=re.IGNORECASE,
+        ).strip()
+
+        plot_raw, road_raw = parse_plot_road_from_text(q_no_file)
 
         # If parsing fails for some reason, fall back to the interactive flow
         if not plot_raw or not road_raw:
@@ -909,16 +965,21 @@ LIMIT 5;
 
         safe_plot = plot.replace("'", "''")
         safe_road = road.replace("'", "''")
+        safe_file_no = file_no.replace("'", "''") if file_no else None
+        file_filter = f" AND TRIM(p.file_no) = '{safe_file_no}'" if safe_file_no else ""
+
 
         sql_pra_lookup = f"""
-SELECT p.pra_
-FROM properties p
-JOIN property_addresses pa
-  ON pa.property_id = p.id
-WHERE LOWER(TRIM(pa.plot_no)) = LOWER('{safe_plot}')
-  AND LOWER(TRIM(pa.road_no)) = LOWER('{safe_road}')
-LIMIT 5;
-""".strip()
+        SELECT p.pra_
+        FROM properties p
+        JOIN property_addresses pa
+        ON pa.property_id = p.id
+        WHERE LOWER(TRIM(pa.plot_no)) = LOWER('{safe_plot}')
+        AND LOWER(TRIM(pa.road_no)) = LOWER('{safe_road}')
+        {file_filter}
+        LIMIT 1;
+        """.strip()
+
 
         pra_rows = run_select(sql_pra_lookup) or []
 
@@ -937,16 +998,22 @@ LIMIT 5;
             return state
 
         # Multiple matches
-        if len(pra_rows) > 1:
-            pras = [row.get("pra_") for row in pra_rows if row.get("pra_")]
-            pras_list = ", ".join(pras) if pras else "N/A"
+        # ✅ NEW: If same plot/road has multiple file numbers, ask user to pick file_no
+        files_sql, file_rows = self._fetch_file_numbers_for_plot_road(plot, road)
+        file_nos = [r.get("file_no") for r in file_rows if r.get("file_no")]
+
+        if (not file_no) and len(file_nos) > 1:
+            any_pra = pra_rows[0].get("pra_") if pra_rows else None  # optional, just "catch any one"
+
+            files_list = ", ".join(file_nos)
             state["final_answer"] = (
-                f"There are multiple properties for plot {plot} and road {road}.\n"
-                f"Matching PRAs: {pras_list}.\n"
-                "Please specify the exact PRA you want the note summary for."
+                f"There are multiple files for plot {plot} and road {road}.\n"
+                f"Available file numbers: {files_list}.\n"
+                f"Please specify the file number, e.g. "
+                f"'generate note summary of plot {plot}/{road} for file number <...>'."
             )
-            state["sql_query"] = sql_pra_lookup
-            state["sql_rows"] = pra_rows
+            state["sql_query"] = files_sql
+            state["sql_rows"] = file_rows
             state["note_pra"] = None
             state["note_pdf_path"] = None
             state["error"] = None
@@ -972,6 +1039,7 @@ LIMIT 5;
         summary_text, pdf_path, _current_rows, _history_rows = generate_property_note_pdf(
             llm=self.llm,
             pra=pra,
+            file_no=file_no,
         )
 
         state["final_answer"] = "note summary saved;"

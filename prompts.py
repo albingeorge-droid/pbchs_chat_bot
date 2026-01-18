@@ -362,7 +362,7 @@ SQL_EXAMPLES = [
         "question": "Who are the current owners of plot 30 road 14",
         "tables": ["properties", "current_owners", "persons", "property_addresses"],
         "sql": """
-SELECT T2.plot_no, T2.road_no, 
+SELECT T1.file_no, T2.plot_no, T2.road_no, 
        T4.name AS current_owner_name, T3.buyer_portion
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
@@ -406,7 +406,7 @@ LIMIT 50;
         "question": "What is the complete ownership history of plot 30 road 14?",
         "tables": ["properties", "ownership_records", "persons", "sale_deeds", "ownership_sellers","property_addresses"],
         "sql": """
-SELECT T2.plot_no, T2.road_no,
+SELECT T1.file_no, T2.plot_no, T2.road_no,
        T3.transfer_type, T3.buyer_portion,
        T4.name AS buyer_name,
        T6.sale_deed_no, T6.signing_date, 
@@ -427,7 +427,7 @@ LIMIT 50;
         "question": "give all the transactions for the plot 30 road 14?",
         "tables": ["properties", "ownership_records", "persons", "sale_deeds", "ownership_sellers","property_addresses"],
         "sql": """
-SELECT T2.plot_no, T2.road_no,
+SELECT T1.file_no, T2.plot_no, T2.road_no,
        T3.transfer_type, T3.buyer_portion,
        T4.name AS buyer_name,
        T6.sale_deed_no, T6.signing_date, 
@@ -448,7 +448,7 @@ LIMIT 50;
         "question": "List all transactions involving Davinder Sodh",
         "tables": ["properties", "ownership_records", "persons", "sale_deeds", "ownership_sellers"],
         "sql": """
-SELECT T3.name AS buyer_name, T5.name AS seller_name, 
+SELECT T1.file_no, T3.name AS buyer_name, T5.name AS seller_name, 
        (T4.signing_date->>0) AS signing_date, T1.file_name, T2.buyer_portion, T2.notes
 FROM properties AS T1
 JOIN ownership_records AS T2 ON T1.id = T2.property_id
@@ -545,7 +545,7 @@ LIMIT 50;
         "question": "What is the plot size for plot 30 road 14",
         "tables": ["properties", "property_addresses"],
         "sql": """
-SELECT T2.plot_no, T2.road_no, T2.initial_plot_size
+SELECT T1.file_no, T2.plot_no, T2.road_no, T2.initial_plot_size
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
 WHERE T2.plot_no = '30' AND T2.road_no = '14'
@@ -557,7 +557,7 @@ LIMIT 50;
         "question": "Show me all properties near road 14",
         "tables": ["properties", "property_addresses"],
         "sql": """
-SELECT T2.plot_no, T2.road_no, T2.street_name ,T2.initial_plot_size
+SELECT T1.file_no, T2.plot_no, T2.road_no, T2.street_name ,T2.initial_plot_size
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
 WHERE T2.road_no = '14'
@@ -569,7 +569,7 @@ LIMIT 50;
         "question": "What properties are in Punjabi Bagh West?",
         "tables": ["properties"],
         "sql": """
-SELECT pra_
+SELECT file_no, pra_
 FROM properties
 WHERE pra_ ILIKE '%Punjabi Bagh West%'
 LIMIT 50;
@@ -581,7 +581,7 @@ LIMIT 50;
         "question": "Show construction details for plot 30 road 14",
         "tables": ["properties", "construction_details", "construction_details", "property_addresses"],
         "sql": """
-SELECT T2.plot_no, T2.road_no, T2.street_name, T2.initial_plot_size,
+SELECT T1.file_no, T2.plot_no, T2.road_no, T2.street_name, T2.initial_plot_size,
        T3.coverage_built_up_area, T3.circle_rate_colony, T3.land_price_per_sqm, 
        T3.construction_price_per_sqm, T3.total_covered_area
 FROM properties AS T1
@@ -596,7 +596,7 @@ LIMIT 50;
         "question": "What is the built-up area for plot 30 road 14",
         "tables": ["properties", "construction_details","construction_details", "property_addresses"],
         "sql": """
-SELECT T2.plot_no, T2.road_no, T2.street_name,
+SELECT T1.file_no, T2.plot_no, T2.road_no, T2.street_name,
        T3.coverage_built_up_area, T3.total_covered_area
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
@@ -610,7 +610,7 @@ LIMIT 50;
         "question": "Show me properties with land price greater than 50000 per sqm",
         "tables": ["properties", "construction_details"],
         "sql": """
-SELECT T1.pra_, T2.land_price_per_sqm, T2.construction_price_per_sqm
+SELECT T1.file_no, T1.pra_, T2.land_price_per_sqm, T2.construction_price_per_sqm
 FROM properties AS T1
 JOIN construction_details AS T2 ON T1.id = T2.property_id
 WHERE T2.land_price_per_sqm != '' 
@@ -624,7 +624,7 @@ LIMIT 50;
         "question": "What are the legal details for plot 30 road 14",
         "tables": ["properties", "legal_details"],
         "sql": """
-SELECT T2.plot_no, T2.road_no, T2.street_name,
+SELECT T1.file_no, T2.plot_no, T2.road_no, T2.street_name,
        T3.registrar_office, T3.court_cases
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
@@ -638,7 +638,7 @@ LIMIT 50;
         "question": "Show all properties with court cases",
         "tables": ["properties", "legal_details"],
         "sql": """
-SELECT T1.pra_, T2.court_cases, T2.registrar_office
+SELECT T1.file_no, T1.pra_, T2.court_cases, T2.registrar_office
 FROM properties AS T1
 JOIN legal_details AS T2 ON T1.id = T2.property_id
 WHERE T2.court_cases IS NOT NULL 
@@ -650,7 +650,7 @@ LIMIT 50;        """.strip(),
         "question": "Which registrar office handles plot 30 road 14",
         "tables": ["properties", "legal_details", "property_addresses"],
         "sql": """
-SELECT T2.plot_no, T2.road_no, T2.street_name,
+SELECT T1.file_no, T2.plot_no, T2.road_no, T2.street_name,
        T3.registrar_office
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
@@ -665,7 +665,7 @@ LIMIT 50;
         "question": "List all transactions after January 2010",
         "tables": ["properties", "ownership_records", "sale_deeds", "persons", "ownership_sellers"],
         "sql": """
-SELECT T1.pra_, T3.name AS buyer_name, T5.name AS seller_name, 
+SELECT T1.file_no, T1.pra_, T3.name AS buyer_name, T5.name AS seller_name, 
        (T4.signing_date->>0) AS signing_date,T2.buyer_portion
 FROM properties AS T1
 JOIN ownership_records AS T2 ON T1.id = T2.property_id
@@ -684,7 +684,7 @@ LIMIT 50;
         "question": "Show transactions between 2015 and 2020",
         "tables": ["properties", "ownership_records", "sale_deeds", "persons", "ownership_sellers"],
         "sql": """
-SELECT T1.pra_,T3.name AS buyer_name, T5.name AS seller_name, T2.buyer_portion,
+SELECT T1.file_no,T1.pra_,T3.name AS buyer_name, T5.name AS seller_name, T2.buyer_portion,
        (T4.signing_date->>0) AS signing_date
 FROM properties AS T1
 JOIN ownership_records AS T2 ON T1.id = T2.property_id
@@ -702,7 +702,7 @@ LIMIT 50;        """.strip(),
         "question": "What transactions happened in 2018?",
         "tables": ["properties", "ownership_records", "sale_deeds", "persons", "ownership_sellers"],
         "sql": """
-SELECT T1.pra_,T3.name AS buyer_name, T5.name AS seller_name, T2.buyer_portion,
+SELECT T1.file_no,T1.pra_,T3.name AS buyer_name, T5.name AS seller_name, T2.buyer_portion,
        (T4.signing_date->>0) AS signing_date
 FROM properties AS T1
 JOIN ownership_records AS T2 ON T1.id = T2.property_id
@@ -722,7 +722,7 @@ LIMIT 50;
         "question": "Show society membership details for member Davinder Sodhi",
         "tables": ["share_certificates", "persons", "properties"],
         "sql": """
-SELECT T1.certificate_number, T2.name,  
+SELECT T3.file_no, T1.certificate_number, T2.name,  
        T1.date_of_transfer, T1.date_of_ending
 FROM share_certificates AS T1
 JOIN persons AS T2 ON T1.member_id = T2.id
@@ -736,7 +736,7 @@ LIMIT 50;
         "question": "Find society members for the plot 30 road 14",
         "tables": ["share_certificates", "persons", "properties", "property_addresses"],
         "sql": """
-SELECT T2.plot_no, T2.road_no, T2.street_name,
+SELECT T1.file_no, T2.plot_no, T2.road_no, T2.street_name,
        T3.certificate_number, T3.date_of_transfer, T3.date_of_ending, T3.notes,
        T4.name AS member_name
 FROM properties AS T1
@@ -752,7 +752,7 @@ LIMIT 50;        """.strip(),
         "question": "Show club membership details for the plot 30 road 14",
         "tables": ["club_memberships", "persons", "properties"],
         "sql": """
-SELECT T2.plot_no, T2.road_no, T2.street_name,
+SELECT T1.file_no, T2.plot_no, T2.road_no, T2.street_name,
        T3.membership_number, T3.allocation_date, T3.membership_end_date,
        T4.name AS member_name
 FROM properties AS T1
@@ -765,18 +765,14 @@ LIMIT 50;
     },
     {
         "id": "ex29",
-        "question": "Find membership number 1649",
-        "tables": ["club_memberships", "persons", "properties","property_addresses"],
+        "question": "What is the file number of plot plot number 10 road 23?",
+        "tables": ["properties","property_addresses"],
         "sql": """
-SELECT T2.plot_no, T2.road_no, T2.street_name,
-       T3.membership_number, T3.allocation_date, T3.membership_end_date,
-       T4.name AS member_name
+SELECT T1.file_no
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
-JOIN club_memberships AS T3 ON T1.id = T3.property_id
-JOIN persons AS T4 ON T3.member_id = T4.id
-WHERE T3.membership_number = '1649'
-LIMIT 50;
+WHERE T2.plot_no = '10' AND T2.road_no = '23'
+LIMIT 1;
         """.strip(),
     },
 
@@ -785,7 +781,7 @@ LIMIT 50;
         "question": "List all properties with their current owners and plot sizes",
         "tables": ["properties", "current_owners", "persons", "property_addresses"],
         "sql": """
-SELECT T1.pra_, T3.name AS owner_name, T2.buyer_portion ,T4.initial_plot_size
+SELECT T1.file_no, T1.pra_, T3.name AS owner_name, T2.buyer_portion ,T4.initial_plot_size
 FROM properties AS T1
 LEFT JOIN current_owners AS T2 ON T1.id = T2.property_id
 LEFT JOIN persons AS T3 ON T2.buyer_id = T3.id
@@ -838,7 +834,7 @@ WHERE pra_ LIKE '%Punjabi Bagh East%';
         "tables": ["properties","property_addresses","current_owners","persons"],
         "sql": """
 SELECT COUNT(T1.id) AS total_properties,
-       T2.plot_no, T2.road_no, T2.street_name,
+       T1.file_no, T2.plot_no, T2.road_no, T2.street_name,
        T4.name AS owner_name, T3.buyer_portion
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
@@ -867,7 +863,7 @@ LIMIT 50;
     "question": "How many transactions were done before year 2000? Also tell what were they",
     "tables": ["ownership_records", "sale_deeds", "persons", "ownership_sellers", "properties", "property_addresses"],
     "sql": """
-SELECT T2.signing_date, T1.transfer_type, 
+SELECT T6.file_no, T2.signing_date, T1.transfer_type, 
        T3.name AS buyer_name, 
        T5.name AS seller_name,
        T1.buyer_portion,
@@ -889,7 +885,7 @@ LIMIT 50;
     "question": "Give me those plot number, road number and buyer and seller name where the current owner is more than one",
     "tables": ["properties", "property_addresses", "current_owners", "persons", "current_owner_sellers"],
     "sql": """
-SELECT T2.plot_no, T2.road_no, T2.street_name,
+SELECT T1.file_no, T2.plot_no, T2.road_no, T2.street_name,
        T4.name AS current_owner_name,
        T6.name AS seller_name
 FROM properties AS T1
@@ -913,7 +909,7 @@ LIMIT 50;
     "question": "What is the plot where the number of transactions is maximum?",
     "tables": ["properties", "property_addresses", "ownership_records"],
     "sql": """
-SELECT T1.id, T2.plot_no, T2.road_no, COUNT(T3.id) AS transaction_count 
+SELECT T1.file_no, T1.id, T2.plot_no, T2.road_no, COUNT(T3.id) AS transaction_count 
 FROM properties AS T1 
 JOIN property_addresses AS T2 ON T1.id = T2.property_id 
 JOIN ownership_records AS T3 ON T1.id = T3.property_id 
@@ -926,6 +922,7 @@ GROUP BY T1.id, T2.plot_no, T2.road_no ORDER BY COUNT(T3.id) DESC LIMIT 1;
     "tables": ["properties", "property_addresses"],
     "sql": """
 SELECT
+       T1.file_no,
        T2.plot_no,
        T2.road_no,
        T2.initial_plot_size
@@ -942,7 +939,7 @@ LIMIT 10;
     "question": "What are the plots where court cases are maximum?",
     "tables": ["properties", "legal_details"],
     "sql": """
-SELECT T1.pra_, COUNT(T2.court_cases) AS court_case_count 
+SELECT T1.file_no, T1.pra_, COUNT(T2.court_cases) AS court_case_count 
 FROM properties AS T1 
 JOIN legal_details AS T2 ON T1.id = T2.property_id 
 WHERE NOT T2.court_cases IS NULL AND CAST(T2.court_cases AS TEXT) <> '[]' 
@@ -954,7 +951,7 @@ GROUP BY T1.pra_ ORDER BY COUNT(T2.court_cases) DESC LIMIT 50;
     "question": "Who were the previous owners of plot 30 on road 14?",
     "tables": ["properties", "property_addresses", "ownership_records","persons","sale_deeds","ownership_sellers"],
     "sql": """
-SELECT T2.plot_no, T2.road_no, T3.transfer_type, T3.buyer_portion, T4.name AS buyer_name, T6.sale_deed_no, T6.signing_date, T7.name AS seller_name 
+SELECT T1.file_no, T2.plot_no, T2.road_no, T3.transfer_type, T3.buyer_portion, T4.name AS buyer_name, T6.sale_deed_no, T6.signing_date, T7.name AS seller_name 
 FROM properties AS T1 
 JOIN property_addresses AS T2 ON T1.id = T2.property_id 
 LEFT JOIN ownership_records AS T3 ON T1.id = T3.property_id 
@@ -970,7 +967,7 @@ WHERE T2.plot_no = '30' AND T2.road_no = '14' LIMIT 50;
     "question": "What transactions were done before the year 2000?",
     "tables": ["properties", "ownership_records","persons","sale_deeds","ownership_sellers"],
     "sql": """
-SELECT T1.pra_, T3.name AS buyer_name, T5.name AS seller_name, T2.buyer_portion, (T4.signing_date ->> 0) AS signing_date 
+SELECT T1.file_no, T1.pra_, T3.name AS buyer_name, T5.name AS seller_name, T2.buyer_portion, (T4.signing_date ->> 0) AS signing_date 
 FROM properties AS T1 
 JOIN ownership_records AS T2 ON T1.id = T2.property_id 
 JOIN persons AS T3 ON T2.buyer_id = T3.id 
@@ -985,7 +982,7 @@ WHERE NOT (T4.signing_date ->> 0) IS NULL AND (T4.signing_date ->> 0) <> '' AND 
     "question": "Who is the original owner of plot 30 on road 14?",
     "tables": ["properties", "property_addresses", "ownership_records","persons","sale_deeds","ownership_sellers"],
     "sql": """
-SELECT T2.plot_no, T2.road_no, T3.transfer_type, T3.buyer_portion, T4.name AS buyer_name, T6.sale_deed_no, T6.signing_date, T7.name AS seller_name 
+SELECT T1.file_no, T2.plot_no, T2.road_no, T3.transfer_type, T3.buyer_portion, T4.name AS buyer_name, T6.sale_deed_no, T6.signing_date, T7.name AS seller_name 
 FROM properties AS T1 
 JOIN property_addresses AS T2 ON T1.id = T2.property_id 
 LEFT JOIN ownership_records AS T3 ON T1.id = T3.property_id 
@@ -1000,7 +997,7 @@ WHERE T2.plot_no = '30' AND T2.road_no = '14' LIMIT 50;
     "question": "What is the transaction history of plot 5 on road East Avenu where the transfer type is sale?",
     "tables": ["properties","ownership_records","persons","sale_deeds","ownership_sellers"],
     "sql": """
-SELECT T2.plot_no, T2.road_no, T3.transfer_type, T3.buyer_portion, T4.name AS buyer_name, T6.sale_deed_no, T6.signing_date, T7.name AS seller_name 
+SELECT T1.file_no, T2.plot_no, T2.road_no, T3.transfer_type, T3.buyer_portion, T4.name AS buyer_name, T6.sale_deed_no, T6.signing_date, T7.name AS seller_name 
 FROM properties AS T1 JOIN property_addresses AS T2 ON T1.id = T2.property_id 
 LEFT JOIN ownership_records AS T3 ON T1.id = T3.property_id AND T3.transfer_type ILIKE '%sale%' 
 LEFT JOIN persons AS T4 ON T3.buyer_id = T4.id 
@@ -1014,7 +1011,7 @@ LEFT JOIN ownership_sellers AS T5 ON T3.id = T5.ownership_id LEFT JOIN persons A
     "tables": ["properties", "property_addresses", "current_owners", "persons"],
     "sql": """
 SELECT 
-       T2.plot_no, T2.road_no, T2.street_name, T2.initial_plot_size,
+       T1.file_no, T2.plot_no, T2.road_no, T2.street_name, T2.initial_plot_size,
        T4.name AS owner_name, T3.buyer_portion
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
@@ -1030,7 +1027,7 @@ LIMIT 50;
     "question": "Give me all the owners who have more than one plot",
     "tables": ["current_owners", "persons", "properties", "property_addresses"],
     "sql": """
-SELECT T2.name AS owner_name, 
+SELECT T3.file_no, T2.name AS owner_name, 
        COUNT(DISTINCT T1.property_id) AS total_properties,
        STRING_AGG(DISTINCT T4.plot_no || '|' || T4.road_no || '|' || T4.street_name, ', ') AS properties_owned
 FROM current_owners AS T1
@@ -1048,7 +1045,8 @@ LIMIT 50;
     "question": "Show the contact details of albin of plot 30 road 14",
     "tables": ["persons", "current_owners", "properties", "property_addresses"],
     "sql": """
-SELECT T1.name,
+SELECT 
+     T1.name,
        T1.phone_number,
        T1.email,
        T1.address,
@@ -1072,7 +1070,7 @@ WHERE T3.plot_no = '30'
         "question": "What plots are located near East Avenue Road?",
         "tables": ["properties", "property_addresses"],
         "sql": """
-SELECT T2.plot_no, T2.road_no, T2.street_name ,T2.initial_plot_size
+SELECT T1.file_no, T2.plot_no, T2.road_no, T2.street_name ,T2.initial_plot_size
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
 WHERE T2.road_no = 'East Avenue Road'
@@ -1085,7 +1083,7 @@ LIMIT 50;
         "question": "What plots are near North Avenue Road?",
         "tables": ["properties", "property_addresses"],
         "sql": """
-SELECT T2.plot_no, T2.road_no, T2.street_name ,T2.initial_plot_size
+SELECT T1.file_no, T2.plot_no, T2.road_no, T2.street_name ,T2.initial_plot_size
 FROM properties AS T1
 JOIN property_addresses AS T2 ON T1.id = T2.property_id
 WHERE T2.road_no = 'North Avenue Road'
@@ -1197,7 +1195,12 @@ Rules:
 - Use the given schema and examples carefully.
 - Prefer ILIKE for case-insensitive text search FOR names ONLY.
 - If a PRA is given, filter on properties.pra_ .
-- If a file_name or file_no is given, filter on properties.file_name or properties.file_no (using ILIKE if partial).
+- File number handling:
+  - If a specific file_name or file_no VALUE is given in the question, filter on properties.file_name or properties.file_no
+    (use ILIKE only if the value looks partial/contains wildcards).
+  - If the question says "with file number" / "include file number" / "show file number" (but does NOT give a specific value),
+    then INCLUDE properties.file_no (and optionally properties.file_name) in the SELECT list, and DO NOT add a WHERE filter like file_no IS NOT NULL.
+
 - If a person_name is given, filter on persons.name using ILIKE with wildcards.
 
 - If the question asks for the *current owner* only (and does NOT ask about dates or when the property was purchased / transferred):
@@ -1282,7 +1285,8 @@ STRICT RULES:
 - Ignore internal identifier or housekeeping fields – do not mention them in the answer. 
   This includes any ids/uuids and tracking/status fields such as:
   id, *_id, uuid, property_id, sale_deed_id, buyer_id, seller_id, person_id,
-  file_no, file_name, qc_status, flag, status.- Do not invent information. Use only what is present in the provided data.
+  qc_status, flag, status.- Do not invent information. Use only what is present in the provided data.
+-file_no is a user-facing field. Do NOT treat it as an internal identifier. If present, include it in every transaction bullet.
 - Whenever you mention any land / plot / built-up size (for example values coming from
   initial_plot_size, coverage_built_up_area, total_covered_area, or similar fields),
   explicitly state the unit as "square yards" (e.g. "200 square yards"), unless the

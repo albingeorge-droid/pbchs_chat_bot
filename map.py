@@ -59,8 +59,6 @@ def parse_plot_road_from_text(text: str) -> Tuple[str | None, str | None]:
 
     return plot, road
 
-
-
 @traceable(run_type="chain", name="map_lookup_pra")
 def lookup_pra_for_plot_road(plot: str, road: str) -> tuple[str, List[Dict[str, Any]]]:
     """
@@ -78,10 +76,10 @@ JOIN property_addresses pa
   ON pa.property_id = p.id
 WHERE LOWER(TRIM(pa.plot_no)) = LOWER('{safe_plot}')
   AND LOWER(TRIM(pa.road_no)) = LOWER('{safe_road}')
-LIMIT 5;
+LIMIT 1;
 """.strip()
 
-    rows = run_select(sql) or []
+    rows = run_select(sql, preserve_limit=True)  # ✅ Keep the LIMIT 1
     return sql, rows
 
 
@@ -108,5 +106,5 @@ FROM pbchs_map
 WHERE properties->>'pra_id' = '{safe_pra}';
 """.strip()
 
-    rows = run_select(sql) or []
+    rows = run_select(sql, preserve_limit=True)  # ✅ Preserve any LIMIT if added
     return sql, rows
