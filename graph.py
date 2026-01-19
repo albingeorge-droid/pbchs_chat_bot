@@ -510,7 +510,8 @@ LIMIT 200;
         ner = ner or {}
 
         # 1) pattern with slash: 30/14
-        match = re.search(r"\b(\d{1,4})\s*/\s*(\d{1,4})\b", text)
+        match = re.search(r"\b([0-9]{1,4}[A-Za-z]?)\s*/\s*([0-9]{1,4}[A-Za-z]?)\b", text)
+
         if match:
             plot, road = match.group(1), match.group(2)
             replacement = f"plot number {plot} road {road}"
@@ -521,7 +522,7 @@ LIMIT 200;
             return text, ner
 
         # 2) pattern with space: 30 14
-        match = re.search(r"\b(\d{1,4})\s+(\d{1,4})\b", text)
+        match = re.search(r"\b([0-9]{1,4}[A-Za-z]?)\s*/\s*([0-9]{1,4}[A-Za-z]?)\b", text)
         if match:
             plot, road = match.group(1), match.group(2)
             replacement = f"plot number {plot} road {road}"

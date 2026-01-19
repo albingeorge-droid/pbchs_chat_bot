@@ -17,7 +17,7 @@ Classify ONLY the CURRENT user message into exactly one label:
    - current owner, previous owners, buyers, sellers
    - sale deeds, transactions, stamp duty
    - share certificates, club memberships
-   - contact details, occupation, address, pan, aadhar, date of birth(dob), phone, email, family members
+   - contact details, occupation, address, pan, aadhar, date of birth(dob), phone, email, family members, birthdays
    - construction details, legal details related to the society records
 
    IMPORTANT:
@@ -158,7 +158,7 @@ Columns:
 - id (String(36), PK): UUID primary key
 - pra (String(255), nullable): Person reference address/identifier
 - name (String(255), required): Full name of the person
-- dob (String(50), nullable): Date of birth as string
+- dob (String(50), nullable): Date of birth as string it is in DD/MM/YYYY format
 - family_members (JSON, list): List of family member names
 - address (Text, nullable): Residential address
 - phone_number (String(50), nullable): Contact phone number
@@ -1090,7 +1090,35 @@ WHERE T2.road_no = 'North Avenue Road'
 LIMIT 50;
         """.strip(),
     },
-
+    {
+    "id": "ex50",
+    "question": "Show all the people who were born in the year 1971",
+    "tables": ["persons"],
+    "sql": """
+SELECT name, dob
+FROM persons
+WHERE dob IS NOT NULL
+  AND dob != ''
+  AND SUBSTRING(dob FROM 7 FOR 4) = '1971'
+ORDER BY SUBSTRING(dob FROM 4 FOR 2)::INTEGER, SUBSTRING(dob FROM 1 FOR 2)::INTEGER
+LIMIT 50;
+    """.strip(),
+},
+{
+    "id": "ex51",
+    "question": "Show all the people born in February in year 1971",
+    "tables": ["persons"],
+    "sql": """
+SELECT name, dob
+FROM persons
+WHERE dob IS NOT NULL
+  AND dob != ''
+  AND SUBSTRING(dob FROM 4 FOR 2) = '02'
+  AND SUBSTRING(dob FROM 7 FOR 4) = '1971'
+ORDER BY SUBSTRING(dob FROM 1 FOR 2)::INTEGER
+LIMIT 50;
+    """.strip(),
+},
 
 
 
@@ -1250,6 +1278,21 @@ Important column-specific rule:
   numerically on it, first exclude empty strings and cast like this:
   WHERE NULLIF(TRIM(property_addresses.initial_plot_size), '') IS NOT NULL
   ORDER BY NULLIF(TRIM(property_addresses.initial_plot_size), '')::DECIMAL ...
+
+-- persons.dob is stored as text like '26/07/1950' (DD/MM/YYYY).
+    - To filter by YEAR of birth, use:
+        SUBSTRING(persons.dob FROM 7 FOR 4)
+      (this returns the 4-digit year, e.g. '1971').
+    - To filter by MONTH of birth, use:
+        SUBSTRING(persons.dob FROM 4 FOR 2)
+      (this returns the 2-digit month, e.g. '02' for February).
+    - Example patterns:
+        * people born in 1971:
+          SUBSTRING(persons.dob FROM 7 FOR 4) = '1971'
+        * people born in February 1971:
+          SUBSTRING(persons.dob FROM 4 FOR 2) = '02'
+          AND SUBSTRING(persons.dob FROM 7 FOR 4) = '1971'
+    - Do NOT use LIKE on dob to filter by month or year.
 
 
 
