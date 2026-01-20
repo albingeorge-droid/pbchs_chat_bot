@@ -52,8 +52,11 @@ def _has_explicit_property_info(user_query: str, ner_entities: Dict[str, Any] | 
         return True
 
     # plot/road numbers present
-    if re.search(r"\bplot\s*\d+\b", q) or re.search(r"\broad\s*\d+\b", q):
+    PLOT_ROAD_TOKEN = r"[0-9A-Za-z]+(?:[/-][0-9A-Za-z]+)*"
+
+    if re.search(rf"\bplot\s*{PLOT_ROAD_TOKEN}\b", q) or re.search(rf"\broad\s*{PLOT_ROAD_TOKEN}\b", q):
         return True
+
 
     # file no
     if re.search(r"\bfile\s*(no|number)?\s*[:\-]?\s*\w+\b", q):
@@ -97,14 +100,17 @@ def _extract_last_property_from_history(
                 result["road_no"] = parts[1]
                 result["area"] = parts[2]
             return result
+        
+        PLOT_ROAD_TOKEN = r"[0-9A-Za-z]+(?:[/-][0-9A-Za-z]+)*"
 
         # 2) "plot X ... road Y" pattern - FIXED to handle both numeric and text roads
         # Try numeric road first
         m_pr = re.search(
-            r"plot\s*(\d+).*?road\s*(\d+)",
+            rf"plot\s*({PLOT_ROAD_TOKEN}).*?road\s*({PLOT_ROAD_TOKEN})",
             text,
             flags=re.IGNORECASE | re.DOTALL,
         )
+
         if m_pr:
             plot_no, road_no = m_pr.group(1), m_pr.group(2)
             result: Dict[str, str] = {"plot_no": plot_no, "road_no": road_no}
@@ -116,14 +122,16 @@ def _extract_last_property_from_history(
             if m_area:
                 result["area"] = f"Punjabi Bagh {m_area.group(1).title()}"
             return result
+        PLOT_ROAD_TOKEN = r"[0-9A-Za-z]+(?:[/-][0-9A-Za-z]+)*"
 
         # 2b) NEW: Try text-based road names like "East Avenue Road", "North Avenue Road"
         # Pattern: "plot <number> ... <road name containing 'road'>"
         m_pr_text = re.search(
-            r"plot\s*(\d+).*?((?:[A-Z][a-z]*\s+)*[A-Z][a-z]*\s+Road)",
+            rf"plot\s*({PLOT_ROAD_TOKEN}).*?((?:[A-Z][a-z]*\s+)*[A-Z][a-z]*\s+Road)",
             text,
             flags=re.IGNORECASE | re.DOTALL,
         )
+
         if m_pr_text:
             plot_no = m_pr_text.group(1)
             road_no = m_pr_text.group(2).strip()  # e.g. "East Avenue Road"
