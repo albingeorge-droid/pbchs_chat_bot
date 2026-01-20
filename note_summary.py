@@ -1,5 +1,5 @@
 from langsmith import traceable
-
+import re
 from db import run_select
 from openai_client import GroqClient
 from prompts import NOTE_SUMMARY_SYSTEM_PROMPT
@@ -183,7 +183,7 @@ def generate_property_note_pdf(
         else:
             pretty_area = area
 
-        title_text = f"Plot no. {plot_no} Road no. {road_no} {pretty_area}".strip()
+        title_text = f"Plot no. {plot_no}, Road no. {road_no}, {pretty_area}".strip()
         property_ref = f"plot {plot_no}, road {road_no}, {pretty_area}".strip(" ,")
 
 
@@ -224,9 +224,9 @@ def generate_property_note_pdf(
         20,   # Date
         38,   # Buyer
         38,   # Seller
-        18,   # Portion
+        26,   # Portion
         25,   # Transfer_type
-        page_width - (10 + 20 + 38 + 38 + 18 + 25),  # Note
+        page_width - (10 + 20 + 38 + 38 + 26 + 25),  # Note
     ]
 
     headers = ["S.No.", "Date", "Buyer", "Seller", "Portion", "Transfer Type", "Note"]
@@ -247,23 +247,56 @@ def generate_property_note_pdf(
         return "".join(ch if ord(ch) >= 32 else " " for ch in text)
 
     def wrap_to_width(pdf_obj: FPDF, text: str, max_width: float) -> List[str]:
-        """Word-wrap a string so each line fits inside max_width for the current font."""
-        words = _clean(text).split()
+        """
+        Word-wrap a string so each line fits inside max_width.
+        Also handles long tokens like 'purchase/allotment' by splitting on '/' and hard-breaking if needed.
+        """
+        text = _clean(text)
+
+        # First, add break opportunities around slashes
+        # "purchase/allotment" -> "purchase / allotment" (so it can wrap)
+        text = re.sub(r"/", " / ", text)
+
+        words = text.split()
         if not words:
             return [""]
 
         lines: List[str] = []
-        current = words[0]
-        for word in words[1:]:
-            test = current + " " + word
+        current = ""
+
+        def flush():
+            nonlocal current
+            if current:
+                lines.append(current)
+                current = ""
+
+        for word in words:
+            # If a single word is too wide, hard-break it
+            if pdf_obj.get_string_width(word) > max_width:
+                flush()
+                chunk = ""
+                for ch in word:
+                    test = chunk + ch
+                    if pdf_obj.get_string_width(test) <= max_width:
+                        chunk = test
+                    else:
+                        if chunk:
+                            lines.append(chunk)
+                        chunk = ch
+                if chunk:
+                    lines.append(chunk)
+                continue
+
+            test = word if not current else current + " " + word
             if pdf_obj.get_string_width(test) <= max_width:
                 current = test
             else:
-                lines.append(current)
+                flush()
                 current = word
-        if current:
-            lines.append(current)
+
+        flush()
         return lines or [""]
+
 
     # Transactions rows
     for idx, row in enumerate(history_rows, start=1):
@@ -283,7 +316,7 @@ def generate_property_note_pdf(
         date_lines = [date]
         buyer_lines = wrap_to_width(pdf, buyer, col_widths[2] - 2)
         seller_lines = wrap_to_width(pdf, seller, col_widths[3] - 2)
-        portion_lines = [portion]
+        portion_lines = wrap_to_width(pdf, portion, col_widths[4] - 2)
         transfer_lines = wrap_to_width(pdf, transfer_type, col_widths[5] - 2)
         note_lines = wrap_to_width(pdf, note_text, col_widths[6] - 2)
 
@@ -343,7 +376,7 @@ def generate_property_note_pdf(
         draw_column(1, date_lines, align="L")
         draw_column(2, buyer_lines, align="L")
         draw_column(3, seller_lines, align="L")
-        draw_column(4, portion_lines, align="R")
+        draw_column(4, portion_lines, align="L")
         draw_column(5, transfer_lines, align="L")
         draw_column(6, note_lines, align="L")
 
@@ -364,8 +397,8 @@ def generate_property_note_pdf(
     owner_headers = ["S.No.", "Name", "Portion"]
     owner_col_widths = [
         15,                  # S.No.
-        page_width - 15 - 25,  # Name
-        25,                  # Portion
+        page_width - 15 - 35,  # Name
+        35,                  # Portion
     ]
 
     pdf.set_font("Arial", "B", 10)
@@ -385,10 +418,50 @@ def generate_property_note_pdf(
             else str(row.get("buyer_portion") or "")
         )
 
-        pdf.cell(owner_col_widths[0], 8, serial, border=1)
-        pdf.cell(owner_col_widths[1], 8, name, border=1)
-        pdf.cell(owner_col_widths[2], 8, portion, border=1, align="R")
-        pdf.ln(8)
+        serial_lines = [serial]
+        name_lines = wrap_to_width(pdf, name, owner_col_widths[1] - 2)
+        portion_lines = wrap_to_width(pdf, portion, owner_col_widths[2] - 2)
+
+        num_lines = max(len(serial_lines), len(name_lines), len(portion_lines))
+        row_height = num_lines * line_height
+
+        # page-break check
+        bottom_limit = pdf.h - pdf.b_margin - inner_margin
+        if pdf.get_y() + row_height > bottom_limit:
+            pdf.add_page()
+            # reprint owner table header
+            pdf.set_font("Arial", "B", 10)
+            pdf.set_x(pdf.l_margin + inner_margin)
+            for w, header in zip(owner_col_widths, owner_headers):
+                pdf.cell(w, 8, header, border=1, align="C")
+            pdf.ln(8)
+            pdf.set_font("Arial", "", 10)
+
+        pdf.set_x(pdf.l_margin + inner_margin)
+        x_start = pdf.get_x()
+        y_start = pdf.get_y()
+
+        # borders
+        x = x_start
+        for w in owner_col_widths:
+            pdf.rect(x, y_start, w, row_height)
+            x += w
+
+        # fill text (reuse your draw_column logic pattern)
+        def draw_owner_col(col_index: int, lines: List[str], align: str = "L"):
+            x_col = x_start + sum(owner_col_widths[:col_index])
+            for i in range(num_lines):
+                text_line = _clean(lines[i]) if i < len(lines) else ""
+                y_line = y_start + 1 + i * line_height
+                pdf.set_xy(x_col + 1, y_line)
+                pdf.cell(owner_col_widths[col_index] - 2, line_height, text_line, border=0, align=align)
+
+        draw_owner_col(0, serial_lines, "L")
+        draw_owner_col(1, name_lines, "L")
+        draw_owner_col(2, portion_lines, "L")
+
+        pdf.set_xy(x_start, y_start + row_height)
+
 
     # ---------- Share certificate section ----------
     pdf.ln(10)
@@ -422,6 +495,9 @@ def generate_property_note_pdf(
             serial = f"{idx}."
             cert_no = row.get("certificate_number") or ""
             member_name = row.get("member_name") or ""
+            member_lines = wrap_to_width(pdf, member_name, share_col_widths[2] - 2)
+            member_name = member_lines[0] + ("..." if len(member_lines) > 1 else "")
+
             d_transfer = (row.get("date_of_transfer") or "")[:10]
 
             pdf.cell(share_col_widths[0], 8, serial, border=1)
@@ -466,6 +542,9 @@ def generate_property_note_pdf(
             serial = f"{idx}."
             membership_no = row.get("membership_number") or ""
             member_name = row.get("member_name") or ""
+            member_lines = wrap_to_width(pdf, member_name, club_col_widths[2] - 2)
+            member_name = member_lines[0] + ("..." if len(member_lines) > 1 else "")
+
             alloc_date = (row.get("allocation_date") or "")[:10]
 
             pdf.cell(club_col_widths[0], 8, serial, border=1)
@@ -477,7 +556,6 @@ def generate_property_note_pdf(
         pdf.set_font("Arial", "I", 9)
         pdf.cell(0, 6, "No club membership records found for this property.", ln=1)
 
-        pdf.cell(0, 6, "No club membership records found for this property.", ln=1)
 
     # Save PDF
     safe_name = pra.replace("|", "_").replace(" ", "_")

@@ -108,9 +108,7 @@ class PropertyChatbotGraph:
         workflow.add_node("save_history", self.save_history)
 
         # NOTE SUMMARY nodes (multi-step)
-        workflow.add_node("start_note_summary", self.start_note_summary)
-        workflow.add_node("collect_plot", self.collect_plot)
-        workflow.add_node("collect_road", self.collect_road)
+
 
         # ✅ single-shot note summary (plot+road in one message)
         workflow.add_node("note_direct", self.note_summary_direct)
@@ -132,9 +130,6 @@ class PropertyChatbotGraph:
                 "small_talk": "handle_small_talk",
                 "irrelevant": "handle_irrelevant",
                 "property_talk": "extract_entities",
-                "note_start": "start_note_summary",
-                "note_plot": "collect_plot",
-                "note_road": "collect_road",
                 "note_direct": "note_direct",
                 "map": "map_lookup",
             },
@@ -154,9 +149,6 @@ class PropertyChatbotGraph:
         workflow.add_edge("save_history", END)
 
         # NOTE SUMMARY flow
-        workflow.add_edge("start_note_summary", END)
-        workflow.add_edge("collect_plot", END)
-        workflow.add_edge("collect_road", END)
         workflow.add_edge("note_direct", END) 
         
         workflow.add_edge("map_lookup", "save_history")
@@ -313,21 +305,14 @@ class PropertyChatbotGraph:
         """
         user_q_raw = state["user_query"]
 
-        # 1) Ongoing note-summary wizard: route by step and SKIP classifier
-        if self.note_flow.get("active"):
-            step = self.note_flow.get("step")
-            if step == "plot":
-                return "note_plot"
-            if step == "road":
-                return "note_road"
 
         # 2) ✅ Single-turn map query
         if self._is_map_trigger(user_q_raw):
             return "map"
 
         # 3) Note-summary request (fuzzy)
+        # 3) Note-summary request (fuzzy) -> ONLY single-shot allowed
         if self._is_note_summary_trigger(user_q_raw):
-            # Try to see if user already gave plot+road in same sentence
             q_no_file = re.sub(
                 r"\bfor\s+file\s*(?:no\.?|number)?\b.*$",
                 "",
@@ -335,27 +320,22 @@ class PropertyChatbotGraph:
                 flags=re.IGNORECASE,
             ).strip()
 
+
             plot_raw, road_raw = parse_plot_road_from_text(q_no_file)
 
-
+            # If plot+road present -> direct
             if plot_raw and road_raw:
-                # Single-shot: don't run the interactive wizard
-                self.note_flow = {
-                    "active": False,
-                    "step": None,
-                    "plot": None,
-                    "road": None,
-                }
                 return "note_direct"
 
-            # Old behaviour: start 2-step wizard
-            self.note_flow = {
-                "active": True,
-                "step": "plot",
-                "plot": None,
-                "road": None,
-            }
-            return "note_start"
+            # If missing -> DO NOT start wizard
+            state["final_answer"] = (
+                "Wizard mode is disabled.\n"
+                "Please ask in one line like:\n"
+                "- generate note summary of plot 8/22\n"
+                "- generate note summary of plot 8 road 22\n"
+            )
+            return "irrelevant"
+
 
         # 4) Normal routing based on classifier label
         label = state["classification"].get("label", "property_talk").strip()
@@ -948,7 +928,7 @@ LIMIT 1;
 
         # 2) strip trailing "for file number ..." before parsing plot/road
         q_no_file = re.sub(
-            r"\bfor\s+file\s*(?:no\.?|number)?\b.*$",
+            r"\b(?:for\s+)?file\s*(?:no\.?|number)?\b.*$",
             "",
             raw_q,
             flags=re.IGNORECASE,
@@ -958,7 +938,20 @@ LIMIT 1;
 
         # If parsing fails for some reason, fall back to the interactive flow
         if not plot_raw or not road_raw:
-            return self.start_note_summary(state)
+            state["final_answer"] = (
+                "Wizard mode is disabled.\n"
+                "Please provide both plot and road in one line, e.g.\n"
+                "- generate note summary of plot 8/22\n"
+                "- generate note summary of plot 8 road 22\n"
+            )
+            state["sql_query"] = "-- NOTE_SUMMARY_DIRECT: missing plot/road"
+            state["sql_rows"] = []
+            state["note_pra"] = None
+            state["note_pdf_path"] = None
+            state["error"] = None
+            state["geometry"] = None
+            return state
+
 
         # Fuzzy match plot + road
         plot = self._fuzzy_match_column("plot_no", plot_raw.strip(), threshold=98)

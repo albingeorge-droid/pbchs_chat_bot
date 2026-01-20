@@ -62,8 +62,6 @@ Where "label" is exactly one of:
 - "irrelevant_question"
 """.strip()
 
-
-
 # =========================
 # Small-talk & out-of-scope replies
 # =========================
@@ -1367,6 +1365,7 @@ OUTPUT FORMAT (VERY IMPORTANT):
        • the buyer’s portion (with %), if present,
        • the date, if present,
        • the transfer type, ONLY if it is present in the data (e.g. a column like transfer_type).
+       • the file number (file_no), if present in the data.
 
    - Example bullet styles:
      - On 08/04/2001, at plot 28, road 6 (28|6|Punjabi Bagh East),
