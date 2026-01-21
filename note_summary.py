@@ -200,7 +200,7 @@ def generate_property_note_pdf(
         pdf.cell(
             0,
             8,
-            f"Initial plot size of the property: {initial_plot_size} sq. yards",
+            f"Plot size of the property: {initial_plot_size} sq. yards",
             ln=1,
         )
         pdf.ln(3)

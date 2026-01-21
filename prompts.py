@@ -1179,8 +1179,10 @@ IMPORTANT RULES (STRICT)
    - If the user query does NOT mention "Punjabi Bagh Housing Society", "Housing Society",
      "the society", or "PBHS", do NOT introduce these phrases.
    - However, if the user query DOES include words like "society member", "society members",
-     "society membership", "share certificate", or "society shares", you MUST preserve those
-     words exactly in BOTH normalized_query and standalone_question.
+     "society membership", "share certificate", "society shares", "club member", "club members", 
+     or "club membership", you MUST preserve those words exactly in BOTH normalized_query and 
+     standalone_question.
+   - Do NOT convert "club" to "society" or vice versa - these are different entities.
    - Keep the normalized_query and standalone_question as MINIMAL as possible otherwise.
 
 
@@ -1292,7 +1294,32 @@ Important column-specific rule:
           AND SUBSTRING(persons.dob FROM 7 FOR 4) = '1971'
     - Do NOT use LIKE on dob to filter by month or year.
 
+Rule Type: Identifier normalization (plot/road)
 
+- If Alphanumeric plot/road identifiers:
+  - Before inserting plot_no or road_no values into SQL string literals, convert any letters to UPPERCASE.
+  - Examples:
+    - Input: plot 4a road 12e  →  Use in SQL: plot_no = '4A' AND road_no = '12E'
+    - Input: plot number 4a road number 7b →  Use in SQL: plot_no = '4A' AND road_no = '7B'
+
+- Road name exceptions (Avenue Roads):
+  - If the road is one of these named roads, ALWAYS output it in the exact canonical Title Case below (do NOT uppercase it):
+    - 'North Avenue Road'
+    - 'East Avenue Road'
+    - 'West Avenue Road'
+    - 'North West Avenue Road'
+  - Example:
+    - Input: road east avenue road → Use in SQL: road_no = 'East Avenue Road'
+
+Rule Type: Person name filter (mandatory when present)
+
+- If the user query contains one or more person names, ALWAYS add a WHERE filter on persons.name using ILIKE with wildcards.
+- Examples:
+  - Input: current owners of plot 4a road 12e for nisha gupta
+    Use in SQL: WHERE persons.name ILIKE '%nisha gupta%'
+  - Input: transactions for plot 4a road 12e for nisha gupta or gopal das
+    Use in SQL: WHERE (persons.name ILIKE '%nisha gupta%' OR persons.name ILIKE '%gopal das%')
+ 
 
 Additional JSON rules:
 

@@ -69,12 +69,6 @@ def _extract_last_property_from_history(
 ) -> Dict[str, str] | None:
     """
     Best-effort extraction of the last property mentioned in history.
-
-    Looks backwards through history for either:
-    - a full PRA like "30|14|Punjabi Bagh East", or
-    - a "plot X ... road Y" pattern, where Y can be numeric or text (e.g. "East Avenue Road")
-
-    Returns a dict that may contain: pra, plot_no, road_no, area.
     """
     if not history_messages:
         return None
@@ -85,7 +79,10 @@ def _extract_last_property_from_history(
         if not text:
             continue
 
-        # 1) PRA pattern, e.g. "30|14|Punjabi Bagh East"
+        # ✅ NEW: Remove duplicated words like "plot plot number" → "plot number"
+        text = re.sub(r'\b(plot|property|file|road)\s+\1\b', r'\1', text, flags=re.IGNORECASE)
+
+        # 1) PRA pattern
         m_pra = re.search(
             r"(\d+\|\d+\|Punjabi Bagh (?:East|West))",
             text,
@@ -103,10 +100,9 @@ def _extract_last_property_from_history(
         
         PLOT_ROAD_TOKEN = r"[0-9A-Za-z]+(?:[/-][0-9A-Za-z]+)*"
 
-        # 2) "plot X ... road Y" pattern - FIXED to handle both numeric and text roads
-        # Try numeric road first
+        # 2) "plot X ... road Y" pattern
         m_pr = re.search(
-            rf"plot\s*({PLOT_ROAD_TOKEN}).*?road\s*({PLOT_ROAD_TOKEN})",
+            rf"plot\s+(?:number\s+)?({PLOT_ROAD_TOKEN}).*?road\s+(?:number\s+)?({PLOT_ROAD_TOKEN})",
             text,
             flags=re.IGNORECASE | re.DOTALL,
         )
@@ -122,19 +118,17 @@ def _extract_last_property_from_history(
             if m_area:
                 result["area"] = f"Punjabi Bagh {m_area.group(1).title()}"
             return result
-        PLOT_ROAD_TOKEN = r"[0-9A-Za-z]+(?:[/-][0-9A-Za-z]+)*"
 
-        # 2b) NEW: Try text-based road names like "East Avenue Road", "North Avenue Road"
-        # Pattern: "plot <number> ... <road name containing 'road'>"
+        # 2b) Text-based road names like "East Avenue Road", "North West Avenue Road"
         m_pr_text = re.search(
-            rf"plot\s*({PLOT_ROAD_TOKEN}).*?((?:[A-Z][a-z]*\s+)*[A-Z][a-z]*\s+Road)",
+            rf"plot\s+(?:number\s+)?({PLOT_ROAD_TOKEN}).*?((?:\w+\s+)*\w+\s+[Rr]oad)",
             text,
             flags=re.IGNORECASE | re.DOTALL,
         )
 
         if m_pr_text:
             plot_no = m_pr_text.group(1)
-            road_no = m_pr_text.group(2).strip()  # e.g. "East Avenue Road"
+            road_no = m_pr_text.group(2).strip()
             result: Dict[str, str] = {"plot_no": plot_no, "road_no": road_no}
             m_area = re.search(
                 r"Punjabi Bagh\s+(East|West)",
@@ -146,8 +140,6 @@ def _extract_last_property_from_history(
             return result
 
     return None
-
-
 def _resolve_vague_property_with_history(
     user_query: str,
     history_messages: List[Dict[str, str]],
@@ -160,6 +152,8 @@ def _resolve_vague_property_with_history(
     STANDALONE_QUESTION_PROMPT so we're not fully dependent on
     the LLM following the prompt perfectly.
     """
+    user_query = re.sub(r'\b(plot|property|file|road)\s+\1\b', r'\1', user_query, flags=re.IGNORECASE)
+
     # If user already gave explicit identifiers, don't touch it.
     if _has_explicit_property_info(user_query, ner_entities):
         return user_query

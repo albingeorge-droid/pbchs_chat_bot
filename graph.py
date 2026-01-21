@@ -397,7 +397,7 @@ LIMIT 200;
     def _fuzzy_match_person_name(
         self,
         raw_name: str,
-        threshold: int = 85,
+        threshold: int = 98,
     ) -> str:
         """
         Fuzzy match a person name against persons.name using RapidFuzz.
