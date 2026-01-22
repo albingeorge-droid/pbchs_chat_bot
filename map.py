@@ -13,10 +13,11 @@ def parse_plot_road_from_text(text: str) -> Tuple[str | None, str | None]:
     """
     Extract (plot_no, road_no) from a natural-language question.
     
-    Both plot and road can be numbers OR text:
-    - "show the map of plot 30 road 14" → ("30", "14")
-    - "map 28/east avenue" → ("28", "east avenue")
-    - "map corner/main" → ("corner", "main")
+    Supports:
+    - "plot 30 road 14" → ("30", "14")
+    - "plot 30/14" → ("30", "14")
+    - "plot 30a road 14b" → ("30a", "14b")
+    - "plot 28/North Avenue Road" → ("28", "north avenue road")
     """
     if not text:
         return None, None
@@ -25,32 +26,21 @@ def parse_plot_road_from_text(text: str) -> Tuple[str | None, str | None]:
     plot = None
     road = None
 
-    # 1) Explicit "plot X" / "road Y" patterns (X and Y can be numbers or text)
-    m_plot = re.search(r"plot\s+([a-z0-9]+(?:\s+[a-z]+)?)", s)
+    # 1) Explicit "plot X" pattern - just get the alphanumeric after "plot"
+    m_plot = re.search(r"plot\s+(?:number\s+)?([a-z0-9]+)\b", s)
     if m_plot:
         plot = m_plot.group(1).strip()
 
-    m_road = re.search(r"road\s+([a-z0-9]+(?:\s+[a-z]+)*)", s)
+    # 2) Explicit "road Y" pattern - capture alphanumeric + optional words
+    m_road = re.search(r"road\s+(?:number\s+)?([a-z0-9]+(?:\s+[a-z]+)*)\b", s)
     if m_road:
         road = m_road.group(1).strip()
 
-    # 2) Pattern "X/Y" where X and Y can be numbers OR text
+    # 3) Pattern "X/Y" where Y can be multi-word (like "North Avenue Road")
     if not (plot and road):
-        # Match "30/14", "28/east avenue", "corner/main", etc.
-        m_pair = re.search(r"\b([a-z0-9]+)\s*/\s*([a-z0-9]+(?:\s+[a-z]+)*)\b", s)
-        if m_pair:
-            if not plot:
-                plot = m_pair.group(1).strip()
-            if not road:
-                road = m_pair.group(2).strip()
-
-    # 3) Pattern "X Y" (space-separated, both can be text or numbers)
-    # Example: "map 30 14", "map corner main"
-    # ⚠️ Be careful: this is very greedy and might match unrelated words
-    # Only use if we didn't find plot/road yet and context suggests map query
-    if not (plot and road) and "map" in s:
-        # Look for two consecutive words after "map" or "map of"
-        m_pair = re.search(r"\bmap\s+(?:of\s+)?([a-z0-9]+)\s+([a-z0-9]+)", s)
+        # Match "30/14", "28/North Avenue Road", etc.
+        # Captures everything after / until end of string or specific delimiters
+        m_pair = re.search(r"\b([a-z0-9]+)\s*/\s*([a-z0-9]+(?:\s+[a-z]+)*)", s)
         if m_pair:
             if not plot:
                 plot = m_pair.group(1).strip()
@@ -58,7 +48,6 @@ def parse_plot_road_from_text(text: str) -> Tuple[str | None, str | None]:
                 road = m_pair.group(2).strip()
 
     return plot, road
-
 @traceable(run_type="chain", name="map_lookup_pra")
 def lookup_pra_for_plot_road(plot: str, road: str) -> tuple[str, List[Dict[str, Any]]]:
     """
