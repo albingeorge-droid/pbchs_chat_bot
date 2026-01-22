@@ -21,7 +21,7 @@ from prompts import (
     SMALL_TALK_SYSTEM_PROMPT,
     OUT_OF_SCOPE_SYSTEM_PROMPT,
     SQL_GENERATION_SYSTEM_PROMPT,
-    NOTE_SUMMARY_SYSTEM_PROMPT,   # NEW
+    NOTE_SUMMARY_SYSTEM_PROMPT,   
 )
 from map import (
     parse_plot_road_from_text,
@@ -29,10 +29,11 @@ from map import (
     fetch_map_for_pra,
 )
 
-from note_summary import generate_property_note_pdf  # NEW
+from note_summary import generate_property_note_pdf 
 from sqlalchemy.exc import ProgrammingError
 from rapidfuzz import fuzz, process
 
+from pathlib import Path
 
 
 SQL_SIMILARITY_THRESHOLD = 0.3
@@ -895,7 +896,7 @@ LIMIT 1;
         )
 
         # As per your requirement: do NOT show summary or path
-        state["final_answer"] = "note summary saved;"
+        state["final_answer"] = Path(pdf_path).name
         state["sql_query"] = sql_pra_lookup + f"\n-- NOTE_SUMMARY for PRA {pra}"
         state["sql_rows"] = pra_rows
         state["note_pra"] = pra
@@ -1036,7 +1037,7 @@ LIMIT 1;
             file_no=file_no,
         )
 
-        state["final_answer"] = "note summary saved;"
+        state["final_answer"] = Path(pdf_path).name
         state["sql_query"] = sql_pra_lookup + f"\n-- NOTE_SUMMARY for PRA {pra}"
         state["sql_rows"] = pra_rows
         state["note_pra"] = pra

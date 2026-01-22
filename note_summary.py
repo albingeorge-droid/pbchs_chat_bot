@@ -42,7 +42,7 @@ def generate_property_note_pdf(
     llm: GroqClient,
     pra: str,
     file_no: str | None = None,
-    output_dir: str = "property_notes",
+    output_dir: str = os.path.join("app", "app", "api", "junk", "property_notes")
 ) -> Tuple[str, str, List[Dict[str, any]], List[Dict[str, any]]]:
     """
     Generate a note summary PDF for a single property PRA.
@@ -54,6 +54,34 @@ def generate_property_note_pdf(
 
     # Basic safety: escape single quotes for literal
     safe_pra = pra.replace("'", "''")
+
+    # --- NEW: infer file_no for filename if user didn't pass it ---
+    file_no_for_filename = file_no  # if user passed, use it
+
+    if not file_no_for_filename:
+        sql_infer_file_no = f"""
+        SELECT file_no
+        FROM (
+            SELECT DISTINCT
+                TRIM(file_no) AS file_no,
+                CASE WHEN TRIM(file_no) ~ '^[0-9]+$' THEN 0 ELSE 1 END AS is_non_numeric,
+                CASE WHEN TRIM(file_no) ~ '^[0-9]+$' THEN TRIM(file_no)::int ELSE NULL END AS file_no_int
+            FROM properties
+            WHERE pra_ = '{safe_pra}'
+            AND file_no IS NOT NULL
+            AND TRIM(file_no) <> ''
+        ) x
+        ORDER BY
+            x.is_non_numeric,
+            x.file_no_int,
+            x.file_no
+        LIMIT 1;
+        """.strip()
+
+        rows = run_select(sql_infer_file_no) or []
+        if rows and rows[0].get("file_no"):
+            file_no_for_filename = str(rows[0]["file_no"]).strip()
+
 
     safe_file_no = file_no.replace("'", "''") if file_no else None
     file_filter_t1 = f" AND TRIM(T1.file_no) = '{safe_file_no}'" if safe_file_no else ""
@@ -559,7 +587,14 @@ def generate_property_note_pdf(
 
     # Save PDF
     safe_name = pra.replace("|", "_").replace(" ", "_")
-    pdf_filename = f"property_note_{safe_name}.pdf"
+
+    prefix = ""
+    if file_no_for_filename:
+        safe_file_no_name = re.sub(r"[^\w\-]+", "_", str(file_no_for_filename).strip())
+        prefix = f"{safe_file_no_name}_"
+
+    pdf_filename = f"{prefix}{safe_name}.pdf"
+
     pdf_path = os.path.join(output_dir, pdf_filename)
     pdf.output(pdf_path)
 
